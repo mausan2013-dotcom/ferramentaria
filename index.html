@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c2430">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Ferramentaria</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<style>
+:root {
+  --bg: #eef0f3; --card: #ffffff; --ink: #14181f; --muted: #5d6673; --line: #d6dae0;
+  --bar: #1c2430; --bar-ink: #ffffff;
+  --accent: #f5b301; --accent-ink: #1a1400;
+  --ok: #157a3c; --ok-bg: #e3f4ea; --bad: #c42121; --bad-bg: #fde7e7; --warn: #a55a00; --warn-bg: #fff1dc;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216; --card: #1a1f26; --ink: #eef1f5; --muted: #9aa4b1; --line: #2c333d;
+    --bar: #151a21; --ok: #4cc07a; --ok-bg: #12301f; --bad: #ff6b6b; --bad-bg: #3a1616; --warn: #f0a640; --warn-bg: #3a2a10;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.4 Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; }
+body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+header.top { position: sticky; top: 0; z-index: 5; background: var(--bar); color: var(--bar-ink); padding: calc(12px + env(safe-area-inset-top)) 16px 12px; display: flex; align-items: center; gap: 10px; }
+header.top h1 { font-size: 19px; margin: 0; flex: 1; font-weight: 700; letter-spacing: .2px; }
+header.top .sub { font-size: 12px; opacity: .7; font-weight: 400; display: block; }
+header.top button { background: none; border: 0; color: inherit; font-size: 26px; padding: 0 6px 0 0; line-height: 1; }
+main { padding: 14px 16px; max-width: 720px; margin: 0 auto; }
+nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; background: var(--card); border-top: 1px solid var(--line); display: flex; padding-bottom: env(safe-area-inset-bottom); }
+nav.tabs a { flex: 1; text-align: center; padding: 9px 2px 10px; color: var(--muted); text-decoration: none; font-size: 11.5px; font-weight: 600; }
+nav.tabs a svg { display: block; margin: 0 auto 3px; width: 24px; height: 24px; }
+nav.tabs a.on { color: var(--ink); }
+nav.tabs a.on svg { color: var(--accent); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+.card h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 18px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.btn.big { width: 100%; min-height: 60px; font-size: 18px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: var(--bad); border-color: var(--bad); }
+.btn.full { width: 100%; }
+.btn:disabled { opacity: .45; }
+.row { display: flex; gap: 10px; align-items: center; }
+.row > .grow { flex: 1; min-width: 0; }
+.stack > * + * { margin-top: 10px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.status { border-radius: var(--radius); padding: 16px; margin-bottom: 12px; border: 1px solid transparent; }
+.status.ok { background: var(--ok-bg); border-color: var(--ok); }
+.status.bad { background: var(--bad-bg); border-color: var(--bad); }
+.status.neutral { background: var(--card); border-color: var(--line); }
+.status .big { font-size: 22px; font-weight: 800; }
+.status.ok .big { color: var(--ok); } .status.bad .big { color: var(--bad); }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+.kpi b { display: block; font-size: 24px; }
+.kpi span { font-size: 12px; color: var(--muted); }
+label.f { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+input, select, textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-height: 48px; }
+textarea { min-height: 80px; resize: vertical; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.list { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
+.li { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); color: inherit; text-decoration: none; }
+.li:first-child { border-top: 0; }
+.li .t { font-weight: 600; }
+.li .s { font-size: 13px; color: var(--muted); }
+.group-h { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 18px 4px 6px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); white-space: nowrap; }
+.tag.ok { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
+.tag.bad { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
+.tag.warn { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
+.qty { font-size: 22px; font-weight: 800; min-width: 44px; text-align: right; }
+/* Linha de contagem */
+.cnt { padding: 12px 14px; border-top: 1px solid var(--line); }
+.cnt:first-child { border-top: 0; }
+.cnt.dif { background: var(--bad-bg); }
+.cnt .top { display: flex; gap: 8px; align-items: flex-start; }
+.cnt .ctl { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.cnt .ctl button { width: 56px; height: 56px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 28px; font-weight: 700; }
+.cnt .ctl input { width: 76px; text-align: center; font-size: 24px; font-weight: 800; height: 56px; padding: 0; }
+.cnt .ctl .same { height: 56px; padding: 0 12px; border-radius: 12px; border: 1px dashed var(--line); background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600; }
+.sticky-foot { position: sticky; bottom: calc(68px + env(safe-area-inset-bottom)); background: var(--bg); padding: 10px 0 4px; }
+.progress { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 6px 0 2px; }
+.progress i { display: block; height: 100%; background: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.chips button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 8px 12px; font: inherit; font-size: 14px; }
+.chips button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+dialog { border: 0; border-radius: 18px; padding: 0; width: min(560px, calc(100% - 24px)); background: var(--card); color: var(--ink); }
+dialog::backdrop { background: rgba(0,0,0,.55); }
+dialog .dh { padding: 16px 16px 0; font-size: 18px; font-weight: 700; }
+dialog .db { padding: 14px 16px; max-height: 70vh; overflow: auto; }
+dialog .df { padding: 0 16px 16px; display: flex; gap: 10px; }
+dialog .df .btn { flex: 1; }
+.toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--bar); color: #fff; padding: 12px 18px; border-radius: 12px; z-index: 50; font-weight: 600; max-width: calc(100% - 32px); }
+.empty { text-align: center; padding: 28px 12px; color: var(--muted); }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.seg button { flex: 1; min-height: 48px; border: 0; background: var(--card); color: var(--ink); font: inherit; font-weight: 600; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.alerta { border-left: 4px solid var(--bad); }
+</style>
+</head>
+<body>
+<header class="top" id="top"></header>
+<main id="app"></main>
+<nav class="tabs" id="tabs"></nav>
+<dialog id="dlg"></dialog>
+
+<script>
+'use strict';
+/* =========================================================================
+   Ferramentaria — conferência de ferramentas por turno (manutenção de vagões)
+   Dados ficam no aparelho (localStorage). Todo registro tem id, criadoEm e
+   dispositivo, para facilitar a sincronização com nuvem numa etapa futura.
+   ========================================================================= */
+
+const CHAVE = 'ferramentaria_v1';
+const MOTIVOS_DIF = ['Não localizada', 'Em uso no vagão', 'Enviada p/ reparo', 'Quebrada', 'Emprestada a outra equipe', 'Encontrada', 'Erro na contagem anterior'];
+
+/* ---------- Armazenamento ---------- */
+const DB = {
+  dados: null,
+  vazio() {
+    return {
+      versao: 1,
+      dispositivo: uid(),
+      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false },
+      itens: [],         // {id, codigo, nome, categoria, local, obs, ativo, criadoEm, atualizadoEm}
+      movs: [],          // {id, itemId, qtd (+/-), tipo, motivo, por, em}
+      conferencias: [],  // {id, turno, responsavel, iniciadaEm, fechadaEm, linhas[], obs, tratamentos{}}
+      rascunho: null
+    };
+  },
+  carregar() {
+    try { this.dados = JSON.parse(localStorage.getItem(CHAVE)); } catch (e) { this.dados = null; }
+    if (!this.dados || !this.dados.versao) this.dados = this.vazio();
+    const v = this.vazio();
+    this.dados.config = Object.assign(v.config, this.dados.config || {});
+    for (const k of ['itens', 'movs', 'conferencias']) if (!Array.isArray(this.dados[k])) this.dados[k] = [];
+  },
+  salvar() {
+    try { localStorage.setItem(CHAVE, JSON.stringify(this.dados)); }
+    catch (e) { alert('Não foi possível salvar no aparelho: ' + e.message); }
+  }
+};
+
+function uid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+const agora = () => new Date().toISOString();
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const $ = (s, el = document) => el.querySelector(s);
+function fmt(ts, comAno) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}${comAno ? '/' + d.getFullYear() : ''} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2400);
+}
+function vibrar(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+
+/* ---------- Regras de negócio ---------- */
+const D = () => DB.dados;
+const itensAtivos = () => D().itens.filter((i) => i.ativo !== false)
+  .sort((a, b) => (a.local || '').localeCompare(b.local || '', 'pt') || a.nome.localeCompare(b.nome, 'pt'));
+const itemPorId = (id) => D().itens.find((i) => i.id === id);
+const ultimaConferencia = () => D().conferencias.reduce((u, c) => (!u || c.fechadaEm > u.fechadaEm ? c : u), null);
+
+// Quantidade esperada agora = contagem da última conferência + movimentações registradas depois dela.
+function esperado(itemId) {
+  const ult = ultimaConferencia();
+  let base = 0, desde = '';
+  if (ult) {
+    desde = ult.fechadaEm;
+    const l = ult.linhas.find((x) => x.itemId === itemId);
+    if (l) base = l.contado;
+  }
+  for (const m of D().movs) if (m.itemId === itemId && m.em > desde) base += m.qtd;
+  return base;
+}
+function movsDesdeUltima(itemId) {
+  const ult = ultimaConferencia();
+  const desde = ult ? ult.fechadaEm : '';
+  return D().movs.filter((m) => m.itemId === itemId && m.em > desde);
+}
+function divergenciasPendentes() {
+  const r = [];
+  for (const c of D().conferencias) for (const l of c.linhas) {
+    if (l.contado !== l.esperado && !(c.tratamentos && c.tratamentos[l.itemId])) r.push({ c, l });
+  }
+  return r.sort((a, b) => (b.c.fechadaEm > a.c.fechadaEm ? 1 : -1));
+}
+function difTexto(d) { return d > 0 ? `sobra +${d}` : `falta ${-d}`; }
+function sugerirTurno() {
+  const h = new Date().getHours();
+  const t = D().config.turnos;
+  if (t.length === 3) return h >= 6 && h < 14 ? t[0] : h >= 14 && h < 22 ? t[1] : t[2];
+  return t[0] || '';
+}
+
+/* ---------- Navegação (hash, para o botão Voltar do Android funcionar) ---------- */
+const ICONES = {
+  inicio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  conferir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3"/><path d="M9 13l2 2 4-4"/></svg>',
+  ferramentas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
+  historico: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>'
+};
+const ABAS = [['inicio', 'Início'], ['conferir', 'Conferir'], ['ferramentas', 'Ferramentas'], ['historico', 'Histórico'], ['ajustes', 'Ajustes']];
+
+function ir(h) { location.hash = h; }
+function rota() {
+  const [nome, arg] = (location.hash.slice(1) || 'inicio').split('/');
+  return { nome, arg: arg ? decodeURIComponent(arg) : '' };
+}
+function topo(titulo, voltar) {
+  const of = D().config.oficina;
+  $('#top').innerHTML = `${voltar ? '<button data-a="voltar" aria-label="Voltar">‹</button>' : ''}
+    <h1>${esc(titulo)}${of ? `<span class="sub">${esc(of)}</span>` : ''}</h1>`;
+}
+function render() {
+  const r = rota();
+  const aba = { conf: 'historico', item: 'ferramentas', resultado: 'conferir' }[r.nome] || r.nome;
+  $('#tabs').innerHTML = ABAS.map(([k, n]) => `<a href="#${k}" class="${k === aba ? 'on' : ''}">${ICONES[k]}${n}</a>`).join('');
+  const v = VIEWS[r.nome] || VIEWS.inicio;
+  v(r.arg);
+  window.scrollTo(0, 0);
+}
+
+/* ---------- Telas ---------- */
+const VIEWS = {};
+
+VIEWS.inicio = () => {
+  topo('Ferramentaria');
+  const ult = ultimaConferencia();
+  const itens = itensAtivos();
+  const total = itens.reduce((s, i) => s + esperado(i.id), 0);
+  const pend = divergenciasPendentes();
+  const rasc = D().rascunho;
+  let status;
+  if (!ult) status = `<div class="status neutral"><div class="big">Nenhuma conferência ainda</div><div class="muted">${itens.length ? 'Faça a primeira conferência para registrar as quantidades de partida.' : 'Comece cadastrando as ferramentas da equipe.'}</div></div>`;
+  else {
+    const nd = ult.linhas.filter((l) => l.contado !== l.esperado).length;
+    status = `<div class="status ${nd ? 'bad' : 'ok'}"><div class="big">${nd ? `⚠ ${nd} divergência${nd > 1 ? 's' : ''}` : '✓ Tudo confere'}</div>
+      <div>Última conferência: <b>${esc(ult.turno)}</b> · ${fmt(ult.fechadaEm)} · ${esc(ult.responsavel)}</div></div>`;
+  }
+  $('#app').innerHTML = `
+    ${status}
+    <div class="kpis">
+      <div class="kpi"><b>${itens.length}</b><span>itens cadastrados</span></div>
+      <div class="kpi"><b>${total}</b><span>unidades esperadas</span></div>
+      <div class="kpi"><b style="color:${pend.length ? 'var(--bad)' : 'inherit'}">${pend.length}</b><span>alertas pendentes</span></div>
+    </div>
+    ${itens.length ? `<button class="btn big primary" data-a="ir" data-h="conferir">${rasc ? 'Continuar conferência em andamento' : 'Iniciar conferência de turno'}</button>`
+      : `<button class="btn big primary" data-a="novo-item">Cadastrar primeira ferramenta</button>`}
+    ${pend.length ? `<div class="group-h">Alertas pendentes</div><div class="list">${pend.map(({ c, l }) => `
+      <div class="li alerta"><div class="grow"><div class="t">${esc(l.nome)} <span class="tag bad">${difTexto(l.contado - l.esperado)}</span></div>
+      <div class="s">${esc(c.turno)} · ${fmt(c.fechadaEm)} · ${esc(c.responsavel)}${l.justificativa ? ' · “' + esc(l.justificativa) + '”' : ''}</div></div>
+      <button class="btn" data-a="tratar" data-c="${c.id}" data-i="${l.itemId}">Tratar</button></div>`).join('')}</div>` : ''}
+  `;
+};
+
+/* --- Conferência --- */
+VIEWS.conferir = () => {
+  const rasc = D().rascunho;
+  topo('Conferência de turno');
+  const itens = itensAtivos();
+  if (!itens.length) { $('#app').innerHTML = `<div class="empty">Nenhuma ferramenta cadastrada.<br><br><button class="btn primary" data-a="ir" data-h="ferramentas">Ir para Ferramentas</button></div>`; return; }
+  if (!rasc) return telaInicioConferencia();
+  telaContagem();
+};
+
+function telaInicioConferencia() {
+  const cfg = D().config;
+  const ult = ultimaConferencia();
+  $('#app').innerHTML = `
+    <div class="card stack">
+      <div><label class="f">Turno</label><div class="chips" id="cTurno">${cfg.turnos.map((t) => `<button data-v="${esc(t)}" class="${t === sugerirTurno() ? 'on' : ''}">${esc(t)}</button>`).join('')}</div></div>
+      <div><label class="f" for="cResp">Responsável pela conferência</label>
+        ${cfg.equipe.length ? `<select id="cResp"><option value="">Selecione…</option>${cfg.equipe.map((p) => `<option>${esc(p)}</option>`).join('')}</select>`
+          : `<input id="cResp" placeholder="Nome de quem está conferindo" autocomplete="name">`}
+      </div>
+      <div class="muted small">${ult ? `Comparando com: <b>${esc(ult.turno)}</b> de ${fmt(ult.fechadaEm)} (${esc(ult.responsavel)})` : 'Primeira conferência: a contagem será comparada com as quantidades cadastradas.'}</div>
+      <button class="btn big primary" data-a="iniciar-conf">Começar contagem</button>
+    </div>`;
+  $('#cTurno').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...$('#cTurno').children].forEach((x) => x.classList.toggle('on', x === b));
+  });
+}
+
+let filtroConf = '';
+function telaContagem() {
+  const r = D().rascunho;
+  const cegas = D().config.cegas;
+  const itens = itensAtivos();
+  const q = filtroConf.trim().toLowerCase();
+  const vis = itens.filter((i) => !q || (i.nome + ' ' + (i.codigo || '') + ' ' + (i.local || '')).toLowerCase().includes(q));
+  const contados = itens.filter((i) => r.contagens[i.id] != null).length;
+  const grupos = {};
+  for (const i of vis) (grupos[i.local || 'Sem local'] ||= []).push(i);
+  $('#app').innerHTML = `
+    <div class="card">
+      <div class="row"><div class="grow"><b>${esc(r.turno)}</b> · ${esc(r.responsavel)}<div class="small muted">Iniciada ${fmt(r.iniciadaEm)}${cegas ? ' · contagem às cegas' : ''}</div></div>
+      <button class="btn danger" data-a="cancelar-conf">Descartar</button></div>
+      <div class="progress"><i style="width:${(contados / itens.length) * 100}%"></i></div>
+      <div class="small muted">${contados} de ${itens.length} itens conferidos</div>
+    </div>
+    <input id="fConf" type="search" placeholder="Buscar ferramenta, código ou local" value="${esc(filtroConf)}" style="margin-bottom:6px">
+    ${Object.entries(grupos).map(([g, lst]) => `<div class="group-h">${esc(g)}</div><div class="list">${lst.map((i) => linhaContagem(i, r, cegas)).join('')}</div>`).join('') || '<div class="empty">Nada encontrado.</div>'}
+    <div class="sticky-foot"><button class="btn big primary" data-a="fechar-conf">Encerrar conferência</button></div>`;
+  const f = $('#fConf');
+  f.addEventListener('input', () => { filtroConf = f.value; const pos = f.selectionStart; telaContagem(); const n = $('#fConf'); n.focus(); n.setSelectionRange(pos, pos); });
+}
+function linhaContagem(i, r, cegas) {
+  const esp = esperado(i.id);
+  const c = r.contagens[i.id];
+  const temC = c != null;
+  const dif = temC ? c - esp : 0;
+  const mv = movsDesdeUltima(i.id);
+  const mvTxt = mv.length && !cegas ? `<div class="s">Movimentações desde o último turno: ${mv.map((m) => (m.qtd > 0 ? '+' : '') + m.qtd).join(', ')}</div>` : '';
+  let tag = '<span class="tag">a conferir</span>';
+  if (temC) tag = cegas ? '<span class="tag">contado</span>' : dif === 0 ? '<span class="tag ok">confere</span>' : `<span class="tag bad">${difTexto(dif)}</span>`;
+  return `<div class="cnt ${temC && dif && !cegas ? 'dif' : ''}" data-item="${i.id}">
+    <div class="top"><div class="grow"><div class="t" style="font-weight:600">${esc(i.nome)}</div>
+      <div class="s small muted">${i.codigo ? esc(i.codigo) + ' · ' : ''}${cegas ? 'contagem às cegas' : `turno anterior: <b>${esp}</b>`}</div>${mvTxt}</div>${tag}</div>
+    <div class="ctl">
+      <button data-a="menos" aria-label="Diminuir">−</button>
+      <input type="number" inputmode="numeric" min="0" value="${temC ? c : ''}" placeholder="—" data-a="qtd" aria-label="Quantidade contada">
+      <button data-a="mais" aria-label="Aumentar">+</button>
+      ${cegas ? '' : `<button class="same" data-a="igual">= ${esp}</button>`}
+    </div></div>`;
+}
+function setContagem(itemId, valor) {
+  const r = D().rascunho;
+  if (valor === '' || valor == null || isNaN(valor)) delete r.contagens[itemId];
+  else r.contagens[itemId] = Math.max(0, Math.floor(Number(valor)));
+  DB.salvar();
+  // Atualiza só a linha e o progresso, sem perder a rolagem.
+  const el = document.querySelector(`.cnt[data-item="${CSS.escape(itemId)}"]`);
+  // (trocar o input focado dispara blur/change de novo; a trava evita a troca dupla)
+  if (el && !setContagem.trava) {
+    setContagem.trava = true;
+    const n = document.createElement('div'); n.innerHTML = linhaContagem(itemPorId(itemId), r, D().config.cegas);
+    try { el.replaceWith(n.firstElementChild); } finally { setContagem.trava = false; }
+  }
+  const itens = itensAtivos();
+  const contados = itens.filter((i) => r.contagens[i.id] != null).length;
+  $('.progress i').style.width = (contados / itens.length) * 100 + '%';
+  $('.progress + .small').textContent = `${contados} de ${itens.length} itens conferidos`;
+}
+
+function fecharConferencia() {
+  const r = D().rascunho;
+  const itens = itensAtivos();
+  const falt = itens.filter((i) => r.contagens[i.id] == null);
+  if (falt.length) {
+    vibrar(200);
+    return modal({ titulo: 'Contagem incompleta', corpo: `<p>Ainda faltam <b>${falt.length}</b> ite${falt.length > 1 ? 'ns' : 'm'} para conferir:</p><div class="small">${falt.slice(0, 12).map((i) => '• ' + esc(i.nome)).join('<br>')}${falt.length > 12 ? '<br>…' : ''}</div>`, ok: 'Voltar à contagem', cancelar: null });
+  }
+  const linhas = itens.map((i) => ({ itemId: i.id, codigo: i.codigo || '', nome: i.nome, local: i.local || '', esperado: esperado(i.id), contado: r.contagens[i.id], justificativa: '' }));
+  const difs = linhas.filter((l) => l.contado !== l.esperado);
+  if (!difs.length) return confirmarFechamento(linhas);
+  vibrar([200, 100, 200]);
+  modal({
+    titulo: `⚠ ${difs.length} divergência${difs.length > 1 ? 's' : ''} com o turno anterior`,
+    corpo: `<p class="small muted">Informe o motivo de cada diferença. O alerta fica registrado e pendente até ser tratado.</p>` +
+      difs.map((l, k) => `<div class="card" style="margin:0 0 10px;border-color:var(--bad)">
+        <div class="row"><b class="grow">${esc(l.nome)}</b><span class="tag bad">${difTexto(l.contado - l.esperado)}</span></div>
+        <div class="small muted">Anterior ${l.esperado} → contado ${l.contado}</div>
+        <div class="chips" data-k="${k}">${MOTIVOS_DIF.map((m) => `<button type="button" data-v="${esc(m)}">${esc(m)}</button>`).join('')}</div>
+        <input data-just="${k}" placeholder="Motivo / observação (obrigatório)"></div>`).join(''),
+    ok: 'Registrar com divergência', cancelar: 'Recontar',
+    aoAbrir(dlg) {
+      dlg.addEventListener('click', (e) => {
+        const b = e.target.closest('.chips button'); if (!b) return;
+        const k = b.parentElement.dataset.k;
+        dlg.querySelector(`[data-just="${k}"]`).value = b.dataset.v;
+        [...b.parentElement.children].forEach((x) => x.classList.toggle('on', x === b));
+      });
+    },
+    validar(dlg) {
+      let ok = true;
+      difs.forEach((l, k) => { const inp = dlg.querySelector(`[data-just="${k}"]`); l.justificativa = inp.value.trim(); if (!l.justificativa) { ok = false; inp.style.outline = '2px solid var(--bad)'; } });
+      if (!ok) toast('Preencha o motivo de todas as divergências');
+      return ok;
+    },
+    aoConfirmar() { confirmarFechamento(linhas, false); }
+  });
+}
+function confirmarFechamento(linhas) {
+  const r = D().rascunho;
+  const c = { id: uid(), turno: r.turno, responsavel: r.responsavel, iniciadaEm: r.iniciadaEm, fechadaEm: agora(), linhas, tratamentos: {}, dispositivo: D().dispositivo };
+  D().conferencias.push(c);
+  D().rascunho = null;
+  filtroConf = '';
+  DB.salvar();
+  ir('resultado/' + c.id);
+}
+
+VIEWS.resultado = (id) => {
+  const c = D().conferencias.find((x) => x.id === id);
+  if (!c) return ir('inicio');
+  topo('Conferência registrada');
+  const difs = c.linhas.filter((l) => l.contado !== l.esperado);
+  $('#app').innerHTML = `
+    <div class="status ${difs.length ? 'bad' : 'ok'}"><div class="big">${difs.length ? `⚠ ${difs.length} divergência${difs.length > 1 ? 's' : ''}` : '✓ Tudo confere com o turno anterior'}</div>
+      <div>${esc(c.turno)} · ${fmt(c.fechadaEm)} · ${esc(c.responsavel)}</div></div>
+    ${difs.length ? `<div class="list">${difs.map((l) => `<div class="li"><div class="grow"><div class="t">${esc(l.nome)}</div><div class="s">${l.esperado} → ${l.contado} · ${esc(l.justificativa)}</div></div><span class="tag bad">${difTexto(l.contado - l.esperado)}</span></div>`).join('')}</div>` : ''}
+    <div class="stack">
+      <button class="btn big primary" data-a="compartilhar" data-c="${c.id}">Enviar relatório (WhatsApp, e-mail…)</button>
+      <button class="btn full" data-a="ir" data-h="conf/${c.id}">Ver conferência completa</button>
+      <button class="btn full" data-a="ir" data-h="inicio">Voltar ao início</button>
+    </div>`;
+  if (difs.length) vibrar([300, 120, 300]);
+};
+
+function textoRelatorio(c) {
+  const difs = c.linhas.filter((l) => l.contado !== l.esperado);
+  const of = D().config.oficina;
+  let t = `*Conferência de ferramentas${of ? ' – ' + of : ''}*\n${c.turno} · ${fmt(c.fechadaEm, true)}\nResponsável: ${c.responsavel}\nItens conferidos: ${c.linhas.length} · Unidades: ${c.linhas.reduce((s, l) => s + l.contado, 0)}\n\n`;
+  if (!difs.length) t += '✅ Tudo confere com o turno anterior.';
+  else {
+    t += `⚠️ *${difs.length} divergência(s):*\n`;
+    for (const l of difs) t += `• ${l.nome}${l.codigo ? ' (' + l.codigo + ')' : ''}: anterior ${l.esperado}, contado ${l.contado} (${difTexto(l.contado - l.esperado)}) – ${l.justificativa}\n`;
+  }
+  return t;
+}
+async function compartilhar(c) {
+  const texto = textoRelatorio(c);
+  if (navigator.share) { try { await navigator.share({ title: 'Conferência de ferramentas', text: texto }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  location.href = 'https://wa.me/?text=' + encodeURIComponent(texto);
+}
+
+/* --- Ferramentas --- */
+let filtroItens = '';
+VIEWS.ferramentas = () => {
+  topo('Ferramentas');
+  const todos = D().itens;
+  const q = filtroItens.trim().toLowerCase();
+  const lista = [...itensAtivos(), ...todos.filter((i) => i.ativo === false)]
+    .filter((i) => !q || (i.nome + ' ' + (i.codigo || '') + ' ' + (i.local || '') + ' ' + (i.categoria || '')).toLowerCase().includes(q));
+  const grupos = {};
+  for (const i of lista) (grupos[i.ativo === false ? 'Desativados' : (i.local || 'Sem local')] ||= []).push(i);
+  $('#app').innerHTML = `
+    <div class="row" style="margin-bottom:10px"><button class="btn primary grow" data-a="novo-item">+ Nova ferramenta</button><button class="btn" data-a="importar">Importar lista</button></div>
+    ${todos.length ? `<input id="fIt" type="search" placeholder="Buscar" value="${esc(filtroItens)}">` : ''}
+    ${Object.entries(grupos).map(([g, l]) => `<div class="group-h">${esc(g)}</div><div class="list">${l.map((i) => `
+      <a class="li" href="#item/${i.id}"><div class="grow"><div class="t">${esc(i.nome)}</div><div class="s">${[i.codigo, i.categoria].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</div></div><span class="qty">${i.ativo === false ? '—' : esperado(i.id)}</span></a>`).join('')}</div>`).join('')
+      || `<div class="empty">${todos.length ? 'Nada encontrado.' : 'Nenhuma ferramenta cadastrada ainda.<br>Use “Importar lista” para cadastrar várias de uma vez.'}</div>`}`;
+  const f = $('#fIt');
+  if (f) f.addEventListener('input', () => { filtroItens = f.value; const p = f.selectionStart; VIEWS.ferramentas(); const n = $('#fIt'); n.focus(); n.setSelectionRange(p, p); });
+};
+
+VIEWS.item = (id) => {
+  const i = itemPorId(id);
+  if (!i) return ir('ferramentas');
+  topo(i.nome, true);
+  const movs = D().movs.filter((m) => m.itemId === id).sort((a, b) => (b.em > a.em ? 1 : -1));
+  const hist = D().conferencias.filter((c) => c.linhas.some((l) => l.itemId === id)).sort((a, b) => (b.fechadaEm > a.fechadaEm ? 1 : -1)).slice(0, 15);
+  $('#app').innerHTML = `
+    <div class="card"><div class="row"><div class="grow">
+      <div class="small muted">${[i.codigo && 'Código ' + esc(i.codigo), i.categoria && esc(i.categoria), i.local && esc(i.local)].filter(Boolean).join(' · ')}</div>
+      ${i.obs ? `<div class="small" style="margin-top:4px">${esc(i.obs)}</div>` : ''}
+      ${i.ativo === false ? '<span class="tag warn">Desativado</span>' : ''}</div>
+      <div style="text-align:right"><div class="qty">${i.ativo === false ? '—' : esperado(i.id)}</div><div class="small muted">esperado</div></div></div></div>
+    <div class="row" style="margin-bottom:12px">
+      <button class="btn grow" data-a="editar-item" data-i="${id}">Editar</button>
+      ${i.ativo === false ? `<button class="btn grow" data-a="reativar" data-i="${id}">Reativar</button>` : `<button class="btn primary grow" data-a="mov" data-i="${id}">Entrada / Baixa</button>`}
+    </div>
+    <div class="group-h">Últimas conferências</div>
+    <div class="list">${hist.map((c) => { const l = c.linhas.find((x) => x.itemId === id); const d = l.contado - l.esperado; return `<a class="li" href="#conf/${c.id}"><div class="grow"><div class="t">${esc(c.turno)} · ${fmt(c.fechadaEm)}</div><div class="s">${esc(c.responsavel)}${l.justificativa ? ' · ' + esc(l.justificativa) : ''}</div></div>${d ? `<span class="tag bad">${difTexto(d)}</span>` : ''}<span class="qty">${l.contado}</span></a>`; }).join('') || '<div class="empty">Ainda não conferida.</div>'}</div>
+    <div class="group-h">Movimentações</div>
+    <div class="list">${movs.map((m) => `<div class="li"><div class="grow"><div class="t">${esc(m.tipo)}${m.motivo ? ' · ' + esc(m.motivo) : ''}</div><div class="s">${fmt(m.em, true)}${m.por ? ' · ' + esc(m.por) : ''}</div></div><span class="qty" style="color:${m.qtd < 0 ? 'var(--bad)' : 'var(--ok)'}">${m.qtd > 0 ? '+' : ''}${m.qtd}</span></div>`).join('') || '<div class="empty">Nenhuma.</div>'}</div>
+    ${i.ativo !== false ? `<button class="btn danger full" data-a="desativar" data-i="${id}">Desativar ferramenta</button>` : ''}`;
+};
+
+function formItem(i) {
+  const novo = !i;
+  i = i || {};
+  const locais = [...new Set(D().itens.map((x) => x.local).filter(Boolean))];
+  const cats = [...new Set(D().itens.map((x) => x.categoria).filter(Boolean))];
+  modal({
+    titulo: novo ? 'Nova ferramenta' : 'Editar ferramenta',
+    corpo: `<div class="stack">
+      <div><label class="f">Nome *</label><input id="iNome" value="${esc(i.nome)}" placeholder="Ex.: Chave de boca 19 mm"></div>
+      <div class="row"><div class="grow"><label class="f">Código / patrimônio</label><input id="iCod" value="${esc(i.codigo)}"></div>
+        ${novo ? '<div style="width:110px"><label class="f">Quantidade *</label><input id="iQtd" type="number" inputmode="numeric" min="0" value="1"></div>' : ''}</div>
+      <div><label class="f">Local (caixa, armário, carrinho…)</label><input id="iLocal" list="dlLocais" value="${esc(i.local)}"><datalist id="dlLocais">${locais.map((l) => `<option value="${esc(l)}">`).join('')}</datalist></div>
+      <div><label class="f">Categoria</label><input id="iCat" list="dlCats" value="${esc(i.categoria)}"><datalist id="dlCats">${cats.map((l) => `<option value="${esc(l)}">`).join('')}</datalist></div>
+      <div><label class="f">Observação</label><textarea id="iObs">${esc(i.obs)}</textarea></div>
+      ${!novo ? '<p class="small muted">Para mudar a quantidade use “Entrada / Baixa”, assim a alteração fica registrada e não gera alerta falso na próxima conferência.</p>' : ''}
+    </div>`,
+    ok: 'Salvar',
+    validar(dlg) {
+      if (!dlg.querySelector('#iNome').value.trim()) { toast('Informe o nome'); return false; }
+      if (novo) { const q = Number(dlg.querySelector('#iQtd').value); if (!(q >= 0)) { toast('Quantidade inválida'); return false; } }
+      return true;
+    },
+    aoConfirmar(dlg) {
+      const v = (s) => dlg.querySelector(s).value.trim();
+      const dados = { nome: v('#iNome'), codigo: v('#iCod'), local: v('#iLocal'), categoria: v('#iCat'), obs: v('#iObs'), atualizadoEm: agora() };
+      if (novo) {
+        const it = Object.assign({ id: uid(), ativo: true, criadoEm: agora() }, dados);
+        D().itens.push(it);
+        const q = Math.floor(Number(v('#iQtd')));
+        if (q) D().movs.push({ id: uid(), itemId: it.id, qtd: q, tipo: 'Cadastro', motivo: 'Quantidade inicial', por: '', em: agora() });
+        DB.salvar(); toast('Ferramenta cadastrada'); render();
+      } else { Object.assign(i, dados); DB.salvar(); render(); }
+    }
+  });
+}
+
+function formMov(i) {
+  const cfg = D().config;
+  let tipo = 'Baixa';
+  modal({
+    titulo: 'Entrada / Baixa — ' + i.nome,
+    corpo: `<div class="stack">
+      <div class="seg" id="mTipo"><button data-v="Entrada">Entrada (+)</button><button data-v="Baixa" class="on">Baixa (−)</button></div>
+      <div><label class="f">Quantidade</label><input id="mQtd" type="number" inputmode="numeric" min="1" value="1"></div>
+      <div><label class="f">Motivo *</label><input id="mMot" list="dlMot" placeholder="Ex.: compra, quebra, enviada p/ reparo"><datalist id="dlMot">${['Compra', 'Retorno de reparo', 'Transferência recebida', 'Quebra', 'Perda', 'Enviada p/ reparo', 'Transferência para outra equipe', 'Descarte'].map((m) => `<option value="${m}">`).join('')}</datalist></div>
+      <div><label class="f">Registrado por</label>${cfg.equipe.length ? `<select id="mPor"><option value=""></option>${cfg.equipe.map((p) => `<option>${esc(p)}</option>`).join('')}</select>` : '<input id="mPor">'}</div>
+      <p class="small muted">Atual esperado: <b>${esperado(i.id)}</b>. A próxima conferência já vai considerar esta movimentação.</p></div>`,
+    ok: 'Registrar',
+    aoAbrir(dlg) { dlg.querySelector('#mTipo').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; tipo = b.dataset.v; [...b.parentElement.children].forEach((x) => x.classList.toggle('on', x === b)); }); },
+    validar(dlg) {
+      const q = Math.floor(Number(dlg.querySelector('#mQtd').value));
+      if (!(q > 0)) { toast('Quantidade inválida'); return false; }
+      if (tipo === 'Baixa' && q > esperado(i.id)) { toast('Baixa maior que a quantidade esperada'); return false; }
+      if (!dlg.querySelector('#mMot').value.trim()) { toast('Informe o motivo'); return false; }
+      return true;
+    },
+    aoConfirmar(dlg) {
+      const q = Math.floor(Number(dlg.querySelector('#mQtd').value));
+      D().movs.push({ id: uid(), itemId: i.id, qtd: tipo === 'Baixa' ? -q : q, tipo, motivo: dlg.querySelector('#mMot').value.trim(), por: dlg.querySelector('#mPor').value.trim(), em: agora() });
+      DB.salvar(); toast('Movimentação registrada'); render();
+    }
+  });
+}
+
+function formImportar() {
+  modal({
+    titulo: 'Importar lista de ferramentas',
+    corpo: `<p class="small muted">Uma ferramenta por linha, campos separados por <b>;</b> (pode colar do Excel, separado por tabulação):<br><code>nome; quantidade; local; código; categoria</code></p>
+      <textarea id="impTxt" style="min-height:180px" placeholder="Chave de boca 19 mm; 4; Caixa 1; CB-19; Chaves&#10;Torquímetro 40-200 Nm; 1; Armário; TQ-01; Medição"></textarea>`,
+    ok: 'Importar',
+    aoConfirmar(dlg) {
+      let n = 0;
+      for (const linha of dlg.querySelector('#impTxt').value.split(/\r?\n/)) {
+        const p = linha.split(/[;\t]/).map((s) => s.trim());
+        if (!p[0]) continue;
+        const it = { id: uid(), nome: p[0], local: p[2] || '', codigo: p[3] || '', categoria: p[4] || '', obs: '', ativo: true, criadoEm: agora(), atualizadoEm: agora() };
+        D().itens.push(it);
+        const q = Math.max(0, Math.floor(Number((p[1] || '1').replace(',', '.')) || 0));
+        if (q) D().movs.push({ id: uid(), itemId: it.id, qtd: q, tipo: 'Cadastro', motivo: 'Quantidade inicial (importação)', por: '', em: agora() });
+        n++;
+      }
+      DB.salvar(); toast(`${n} ferramenta(s) importada(s)`); render();
+    }
+  });
+}
+
+/* --- Histórico --- */
+VIEWS.historico = () => {
+  topo('Histórico');
+  const cs = [...D().conferencias].sort((a, b) => (b.fechadaEm > a.fechadaEm ? 1 : -1));
+  $('#app').innerHTML = cs.length ? `<div class="list">${cs.map((c) => {
+    const nd = c.linhas.filter((l) => l.contado !== l.esperado).length;
+    const pend = c.linhas.filter((l) => l.contado !== l.esperado && !(c.tratamentos || {})[l.itemId]).length;
+    return `<a class="li" href="#conf/${c.id}"><div class="grow"><div class="t">${esc(c.turno)} · ${fmt(c.fechadaEm)}</div><div class="s">${esc(c.responsavel)} · ${c.linhas.length} itens</div></div>
+      ${nd ? `<span class="tag ${pend ? 'bad' : 'warn'}">${nd} diverg.${pend ? '' : ' (tratadas)'}</span>` : '<span class="tag ok">OK</span>'}</a>`;
+  }).join('')}</div>` : '<div class="empty">Nenhuma conferência registrada.</div>';
+};
+
+VIEWS.conf = (id) => {
+  const c = D().conferencias.find((x) => x.id === id);
+  if (!c) return ir('historico');
+  topo(`${c.turno} · ${fmt(c.fechadaEm)}`, true);
+  const trat = c.tratamentos || {};
+  const ord = [...c.linhas].sort((a, b) => (Math.abs(b.contado - b.esperado) > 0) - (Math.abs(a.contado - a.esperado) > 0));
+  $('#app').innerHTML = `
+    <div class="card"><div>Responsável: <b>${esc(c.responsavel)}</b></div><div class="small muted">Início ${fmt(c.iniciadaEm, true)} · fim ${fmt(c.fechadaEm, true)}</div></div>
+    <button class="btn full" data-a="compartilhar" data-c="${c.id}" style="margin-bottom:12px">Enviar relatório</button>
+    <div class="list">${ord.map((l) => {
+      const d = l.contado - l.esperado;
+      const t = trat[l.itemId];
+      return `<div class="li ${d && !t ? 'alerta' : ''}"><div class="grow"><div class="t">${esc(l.nome)}</div>
+        <div class="s">${l.codigo ? esc(l.codigo) + ' · ' : ''}anterior ${l.esperado} → contado ${l.contado}${l.justificativa ? ' · “' + esc(l.justificativa) + '”' : ''}</div>
+        ${t ? `<div class="s" style="color:var(--ok)">Tratado: ${esc(t.nota)} — ${esc(t.por)} ${fmt(t.em)}</div>` : ''}</div>
+        ${d ? (t ? `<span class="tag warn">${difTexto(d)}</span>` : `<button class="btn" data-a="tratar" data-c="${c.id}" data-i="${l.itemId}">Tratar</button>`) : '<span class="tag ok">ok</span>'}</div>`;
+    }).join('')}</div>`;
+};
+
+function formTratar(c, itemId) {
+  const l = c.linhas.find((x) => x.itemId === itemId);
+  const cfg = D().config;
+  modal({
+    titulo: 'Tratar divergência',
+    corpo: `<div class="stack"><div><b>${esc(l.nome)}</b> <span class="tag bad">${difTexto(l.contado - l.esperado)}</span><div class="small muted">${esc(c.turno)} · ${fmt(c.fechadaEm)} · “${esc(l.justificativa)}”</div></div>
+      <div><label class="f">O que foi feito? *</label><textarea id="tNota" placeholder="Ex.: encontrada no vagão 123; aberta solicitação de reposição; baixa registrada"></textarea></div>
+      <div><label class="f">Tratado por</label>${cfg.equipe.length ? `<select id="tPor"><option value=""></option>${cfg.equipe.map((p) => `<option>${esc(p)}</option>`).join('')}</select>` : '<input id="tPor">'}</div></div>`,
+    ok: 'Marcar como tratada',
+    validar(dlg) { if (!dlg.querySelector('#tNota').value.trim()) { toast('Descreva o tratamento'); return false; } return true; },
+    aoConfirmar(dlg) {
+      c.tratamentos = c.tratamentos || {};
+      c.tratamentos[itemId] = { nota: dlg.querySelector('#tNota').value.trim(), por: dlg.querySelector('#tPor').value.trim(), em: agora() };
+      DB.salvar(); toast('Divergência tratada'); render();
+    }
+  });
+}
+
+/* --- Ajustes --- */
+VIEWS.ajustes = () => {
+  topo('Ajustes');
+  const cfg = D().config;
+  $('#app').innerHTML = `
+    <div class="card stack"><h2>Equipe</h2>
+      <div><label class="f">Nome da oficina / equipe</label><input id="cfOf" value="${esc(cfg.oficina)}" placeholder="Ex.: Manutenção de vagões – Pátio X"></div>
+      <div><label class="f">Turnos (um por linha)</label><textarea id="cfTur">${esc(cfg.turnos.join('\n'))}</textarea></div>
+      <div><label class="f">Pessoas da equipe (uma por linha)</label><textarea id="cfEq" placeholder="Usadas na lista de responsáveis">${esc(cfg.equipe.join('\n'))}</textarea></div>
+      <label class="row" style="gap:12px"><input type="checkbox" id="cfCegas" ${cfg.cegas ? 'checked' : ''} style="width:24px;min-height:24px"> <span class="grow">Contagem às cegas<br><span class="small muted">Esconde a quantidade do turno anterior durante a contagem; a comparação aparece só no fim.</span></span></label>
+      <button class="btn primary full" data-a="salvar-cfg">Salvar</button>
+    </div>
+    <div class="card stack"><h2>Dados</h2>
+      <p class="small muted" style="margin:0">Os dados ficam só neste aparelho. Faça backup com frequência.</p>
+      <button class="btn full" data-a="backup">Exportar backup (.json)</button>
+      <button class="btn full" data-a="restaurar">Restaurar backup</button>
+      <button class="btn full" data-a="csv">Exportar conferências (.csv / Excel)</button>
+      <button class="btn danger full" data-a="apagar">Apagar todos os dados</button>
+      <input type="file" id="arqBackup" accept="application/json,.json" hidden>
+    </div>
+    <p class="small muted" style="text-align:center">Ferramentaria v1.0 · funciona sem internet</p>`;
+  $('#arqBackup').addEventListener('change', restaurar);
+};
+
+function baixar(nome, conteudo, tipo) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
+  a.download = nome; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function hoje() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function exportarCSV() {
+  const cel = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const linhas = [['Data', 'Turno', 'Responsável', 'Código', 'Ferramenta', 'Local', 'Anterior', 'Contado', 'Diferença', 'Motivo', 'Tratamento']];
+  for (const c of [...D().conferencias].sort((a, b) => (a.fechadaEm > b.fechadaEm ? 1 : -1)))
+    for (const l of c.linhas) { const t = (c.tratamentos || {})[l.itemId]; linhas.push([fmt(c.fechadaEm, true), c.turno, c.responsavel, l.codigo, l.nome, l.local, l.esperado, l.contado, l.contado - l.esperado, l.justificativa, t ? t.nota : '']); }
+  baixar(`conferencias-${hoje()}.csv`, '﻿' + linhas.map((r) => r.map(cel).join(';')).join('\r\n'), 'text/csv');
+}
+function restaurar(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    let d;
+    try { d = JSON.parse(rd.result); } catch (err) { return toast('Arquivo inválido'); }
+    if (!d || !Array.isArray(d.itens) || !Array.isArray(d.conferencias)) return toast('Não é um backup da Ferramentaria');
+    modal({ titulo: 'Restaurar backup?', corpo: `<p>O backup tem <b>${d.itens.length}</b> ferramentas e <b>${d.conferencias.length}</b> conferências. Os dados atuais deste aparelho serão <b>substituídos</b>.</p>`, ok: 'Restaurar',
+      aoConfirmar() { localStorage.setItem(CHAVE, JSON.stringify(d)); DB.carregar(); DB.salvar(); toast('Backup restaurado'); ir('inicio'); render(); } });
+  };
+  rd.readAsText(f);
+  e.target.value = '';
+}
+
+/* ---------- Modal genérico ---------- */
+function modal({ titulo, corpo, ok = 'OK', cancelar = 'Cancelar', perigo, validar, aoConfirmar, aoAbrir }) {
+  const dlg = $('#dlg');
+  dlg.innerHTML = `<div class="dh">${esc(titulo)}</div><div class="db">${corpo}</div>
+    <div class="df">${cancelar ? `<button class="btn" data-m="x">${esc(cancelar)}</button>` : ''}<button class="btn ${perigo ? 'danger' : 'primary'}" data-m="ok">${esc(ok)}</button></div>`;
+  dlg.onclick = (e) => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    if (b.dataset.m === 'x') return dlg.close();
+    if (validar && !validar(dlg)) return;
+    dlg.close();
+    aoConfirmar && aoConfirmar(dlg);
+  };
+  aoAbrir && aoAbrir(dlg);
+  dlg.showModal();
+}
+
+/* ---------- Ações ---------- */
+const ACOES = {
+  voltar: () => history.length > 1 ? history.back() : ir('inicio'),
+  ir: (el) => ir(el.dataset.h),
+  'novo-item': () => formItem(null),
+  'editar-item': (el) => formItem(itemPorId(el.dataset.i)),
+  mov: (el) => formMov(itemPorId(el.dataset.i)),
+  importar: formImportar,
+  desativar: (el) => {
+    const i = itemPorId(el.dataset.i);
+    modal({ titulo: 'Desativar ferramenta?', corpo: `<p><b>${esc(i.nome)}</b> sai das próximas conferências. As ${esperado(i.id)} unidade(s) esperadas recebem baixa automática. O histórico é mantido.</p>`, ok: 'Desativar', perigo: true,
+      aoConfirmar() { const q = esperado(i.id); if (q) D().movs.push({ id: uid(), itemId: i.id, qtd: -q, tipo: 'Baixa', motivo: 'Ferramenta desativada', por: '', em: agora() }); i.ativo = false; i.atualizadoEm = agora(); DB.salvar(); render(); } });
+  },
+  reativar: (el) => { const i = itemPorId(el.dataset.i); i.ativo = true; i.atualizadoEm = agora(); DB.salvar(); toast('Reativada. Registre uma entrada com a quantidade.'); render(); },
+  'iniciar-conf': () => {
+    const on = $('#cTurno .on');
+    const resp = $('#cResp').value.trim();
+    if (!on) return toast('Escolha o turno');
+    if (!resp) return toast('Informe o responsável');
+    D().rascunho = { id: uid(), turno: on.dataset.v, responsavel: resp, iniciadaEm: agora(), contagens: {} };
+    DB.salvar(); render();
+  },
+  'cancelar-conf': () => modal({ titulo: 'Descartar conferência?', corpo: '<p>As contagens feitas até agora serão perdidas.</p>', ok: 'Descartar', perigo: true, aoConfirmar() { D().rascunho = null; filtroConf = ''; DB.salvar(); render(); } }),
+  'fechar-conf': fecharConferencia,
+  menos: (el) => { const id = el.closest('.cnt').dataset.item; const c = D().rascunho.contagens[id]; setContagem(id, c == null ? 0 : Math.max(0, c - 1)); },
+  mais: (el) => { const id = el.closest('.cnt').dataset.item; const c = D().rascunho.contagens[id]; setContagem(id, c == null ? 1 : c + 1); },
+  igual: (el) => { const id = el.closest('.cnt').dataset.item; setContagem(id, esperado(id)); },
+  compartilhar: (el) => compartilhar(D().conferencias.find((c) => c.id === el.dataset.c)),
+  tratar: (el) => formTratar(D().conferencias.find((c) => c.id === el.dataset.c), el.dataset.i),
+  'salvar-cfg': () => {
+    const linhas = (s) => $(s).value.split('\n').map((x) => x.trim()).filter(Boolean);
+    const cfg = D().config;
+    cfg.oficina = $('#cfOf').value.trim();
+    cfg.turnos = linhas('#cfTur'); if (!cfg.turnos.length) cfg.turnos = ['Turno A', 'Turno B', 'Turno C'];
+    cfg.equipe = linhas('#cfEq');
+    cfg.cegas = $('#cfCegas').checked;
+    DB.salvar(); toast('Ajustes salvos'); render();
+  },
+  backup: () => baixar(`ferramentaria-backup-${hoje()}.json`, JSON.stringify(D(), null, 1), 'application/json'),
+  restaurar: () => $('#arqBackup').click(),
+  csv: exportarCSV,
+  apagar: () => modal({ titulo: 'Apagar todos os dados?', corpo: '<p>Ferramentas, conferências e ajustes deste aparelho serão apagados. <b>Não dá para desfazer.</b> Exporte um backup antes.</p>', ok: 'Apagar tudo', perigo: true,
+    aoConfirmar() { DB.dados = DB.vazio(); DB.salvar(); toast('Dados apagados'); ir('inicio'); render(); } })
+};
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-a]');
+  if (!el || el.tagName === 'INPUT' || el.closest('dialog')) return;
+  const fn = ACOES[el.dataset.a];
+  if (fn) { e.preventDefault(); fn(el); }
+});
+document.addEventListener('change', (e) => {
+  if (e.target.dataset.a === 'qtd') setContagem(e.target.closest('.cnt').dataset.item, e.target.value);
+});
+window.addEventListener('hashchange', render);
+
+/* ---------- Início ---------- */
+DB.carregar();
+render();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+</script>
+</body>
+</html>
