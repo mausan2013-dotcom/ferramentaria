@@ -28,6 +28,8 @@ body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 header.top { position: sticky; top: 0; z-index: 5; background: var(--bar); color: var(--bar-ink); padding: calc(12px + env(safe-area-inset-top)) 16px 12px; display: flex; align-items: center; gap: 10px; }
 header.top h1 { font-size: 19px; margin: 0; flex: 1; font-weight: 700; letter-spacing: .2px; }
 header.top .sub { font-size: 12px; opacity: .7; font-weight: 400; display: block; }
+header.top .sinc { font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.12); white-space: nowrap; }
+header.top .sinc.offline, header.top .sinc.erro { background: #8a5a00; }
 header.top button { background: none; border: 0; color: inherit; font-size: 26px; padding: 0 6px 0 0; line-height: 1; }
 main { padding: 14px 16px; max-width: 720px; margin: 0 auto; }
 nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; background: var(--card); border-top: 1px solid var(--line); display: flex; padding-bottom: env(safe-area-inset-bottom); }
@@ -112,8 +114,8 @@ dialog .df .btn { flex: 1; }
 'use strict';
 /* =========================================================================
    Ferramentaria — conferência de ferramentas por turno (manutenção de vagões)
-   Dados ficam no aparelho (localStorage). Todo registro tem id, criadoEm e
-   dispositivo, para facilitar a sincronização com nuvem numa etapa futura.
+   Local primeiro: tudo é salvo no aparelho (localStorage) na hora e, com login,
+   sincronizado com a nuvem (Supabase) quando há internet. Ver "Nuvem" abaixo.
    ========================================================================= */
 
 const CHAVE = 'ferramentaria_v1';
@@ -126,11 +128,13 @@ const DB = {
     return {
       versao: 1,
       dispositivo: uid(),
-      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false, senha: null, contatos: [], whatsAuto: true },  // contatos = [{nome, numero}] para alertas  // senha = {sal, hash} do PIN do supervisor
+      // senha = {sal, hash} do PIN do supervisor; contatos = [{nome, numero}] para alertas
+      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false, senha: null, contatos: [], whatsAuto: true },
       itens: [],         // {id, codigo, nome, categoria, local, obs, ativo, criadoEm, atualizadoEm}
       movs: [],          // {id, itemId, qtd (+/-), tipo, motivo, por, em}
-      conferencias: [],  // {id, turno, responsavel, iniciadaEm, fechadaEm, linhas[], obs, tratamentos{}}
-      rascunho: null
+      conferencias: [],  // {id, turno, responsavel, iniciadaEm, fechadaEm, linhas[], envios{}}
+      tratamentos: [],   // {id: confId + ':' + itemId, confId, itemId, nota, por, em}
+      rascunho: null     // conferência em andamento: fica só neste aparelho
     };
   },
   carregar() {
@@ -138,11 +142,20 @@ const DB = {
     if (!this.dados || !this.dados.versao) this.dados = this.vazio();
     const v = this.vazio();
     this.dados.config = Object.assign(v.config, this.dados.config || {});
-    for (const k of ['itens', 'movs', 'conferencias']) if (!Array.isArray(this.dados[k])) this.dados[k] = [];
+    for (const k of ['itens', 'movs', 'conferencias', 'tratamentos']) if (!Array.isArray(this.dados[k])) this.dados[k] = [];
+    // v1.2 guardava os tratamentos dentro da conferência; agora são registros próprios (sincronizam sem conflito)
+    for (const c of this.dados.conferencias) if (c.tratamentos) {
+      for (const [itemId, t] of Object.entries(c.tratamentos)) {
+        const id = c.id + ':' + itemId;
+        if (!this.dados.tratamentos.some((x) => x.id === id)) this.dados.tratamentos.push(Object.assign({ id, confId: c.id, itemId }, t));
+      }
+      delete c.tratamentos;
+    }
   },
-  salvar() {
+  salvar(semEnviar) {
     try { localStorage.setItem(CHAVE, JSON.stringify(this.dados)); }
     catch (e) { alert('Não foi possível salvar no aparelho: ' + e.message); }
+    if (!semEnviar) Nuvem.agendar();
   }
 };
 
@@ -173,6 +186,7 @@ const D = () => DB.dados;
 const itensAtivos = () => D().itens.filter((i) => i.ativo !== false)
   .sort((a, b) => (a.local || '').localeCompare(b.local || '', 'pt') || a.nome.localeCompare(b.nome, 'pt'));
 const itemPorId = (id) => D().itens.find((i) => i.id === id);
+const tratamentoDe = (confId, itemId) => D().tratamentos.find((t) => t.id === confId + ':' + itemId);
 const ultimaConferencia = () => D().conferencias.reduce((u, c) => (!u || c.fechadaEm > u.fechadaEm ? c : u), null);
 
 // Quantidade esperada agora = contagem da última conferência + movimentações registradas depois dela.
@@ -195,7 +209,7 @@ function movsDesdeUltima(itemId) {
 function divergenciasPendentes() {
   const r = [];
   for (const c of D().conferencias) for (const l of c.linhas) {
-    if (l.contado !== l.esperado && !(c.tratamentos && c.tratamentos[l.itemId])) r.push({ c, l });
+    if (l.contado !== l.esperado && !tratamentoDe(c.id, l.itemId)) r.push({ c, l });
   }
   return r.sort((a, b) => (b.c.fechadaEm > a.c.fechadaEm ? 1 : -1));
 }
@@ -225,9 +239,12 @@ function rota() {
 function topo(titulo, voltar) {
   const of = D().config.oficina;
   $('#top').innerHTML = `${voltar ? '<button data-a="voltar" aria-label="Voltar">‹</button>' : ''}
-    <h1>${esc(titulo)}${of ? `<span class="sub">${esc(of)}</span>` : ''}</h1>`;
+    <h1>${esc(titulo)}${of ? `<span class="sub">${esc(of)}</span>` : ''}</h1>
+    ${Nuvem.ativa() ? '<button class="sinc" id="sincSt" data-a="sinc-info" aria-label="Situação da nuvem"></button>' : ''}`;
+  Nuvem.mostrar();
 }
 function render() {
+  if (Nuvem.precisaLogin()) return telaLogin();
   const r = rota();
   const aba = { conf: 'historico', item: 'ferramentas', resultado: 'conferir' }[r.nome] || r.nome;
   $('#tabs').innerHTML = ABAS.map(([k, n]) => `<a href="#${k}" class="${k === aba ? 'on' : ''}">${ICONES[k]}${n}</a>`).join('');
@@ -400,7 +417,7 @@ function fecharConferencia() {
 }
 function confirmarFechamento(linhas) {
   const r = D().rascunho;
-  const c = { id: uid(), turno: r.turno, responsavel: r.responsavel, iniciadaEm: r.iniciadaEm, fechadaEm: agora(), linhas, tratamentos: {}, dispositivo: D().dispositivo };
+  const c = { id: uid(), turno: r.turno, responsavel: r.responsavel, iniciadaEm: r.iniciadaEm, fechadaEm: agora(), linhas, dispositivo: D().dispositivo };
   D().conferencias.push(c);
   D().rascunho = null;
   filtroConf = '';
@@ -607,7 +624,7 @@ VIEWS.historico = () => {
   const cs = [...D().conferencias].sort((a, b) => (b.fechadaEm > a.fechadaEm ? 1 : -1));
   $('#app').innerHTML = cs.length ? `<div class="list">${cs.map((c) => {
     const nd = c.linhas.filter((l) => l.contado !== l.esperado).length;
-    const pend = c.linhas.filter((l) => l.contado !== l.esperado && !(c.tratamentos || {})[l.itemId]).length;
+    const pend = c.linhas.filter((l) => l.contado !== l.esperado && !tratamentoDe(c.id, l.itemId)).length;
     return `<a class="li" href="#conf/${c.id}"><div class="grow"><div class="t">${esc(c.turno)} · ${fmt(c.fechadaEm)}</div><div class="s">${esc(c.responsavel)} · ${c.linhas.length} itens</div></div>
       ${nd ? `<span class="tag ${pend ? 'bad' : 'warn'}">${nd} diverg.${pend ? '' : ' (tratadas)'}</span>` : '<span class="tag ok">OK</span>'}</a>`;
   }).join('')}</div>` : '<div class="empty">Nenhuma conferência registrada.</div>';
@@ -617,7 +634,6 @@ VIEWS.conf = (id) => {
   const c = D().conferencias.find((x) => x.id === id);
   if (!c) return ir('historico');
   topo(`${c.turno} · ${fmt(c.fechadaEm)}`, true);
-  const trat = c.tratamentos || {};
   const ord = [...c.linhas].sort((a, b) => (Math.abs(b.contado - b.esperado) > 0) - (Math.abs(a.contado - a.esperado) > 0));
   $('#app').innerHTML = `
     <div class="card"><div>Responsável: <b>${esc(c.responsavel)}</b></div><div class="small muted">Início ${fmt(c.iniciadaEm, true)} · fim ${fmt(c.fechadaEm, true)}</div></div>
@@ -625,7 +641,7 @@ VIEWS.conf = (id) => {
     <button class="btn full" data-a="compartilhar" data-c="${c.id}" style="margin-bottom:12px">Enviar relatório</button>
     <div class="list">${ord.map((l) => {
       const d = l.contado - l.esperado;
-      const t = trat[l.itemId];
+      const t = tratamentoDe(c.id, l.itemId);
       return `<div class="li ${d && !t ? 'alerta' : ''}"><div class="grow"><div class="t">${esc(l.nome)}</div>
         <div class="s">${l.codigo ? esc(l.codigo) + ' · ' : ''}anterior ${l.esperado} → contado ${l.contado}${l.justificativa ? ' · “' + esc(l.justificativa) + '”' : ''}</div>
         ${t ? `<div class="s" style="color:var(--ok)">Tratado: ${esc(t.nota)} — ${esc(t.por)} ${fmt(t.em)}</div>` : ''}</div>
@@ -644,8 +660,7 @@ function formTratar(c, itemId) {
     ok: 'Marcar como tratada',
     validar(dlg) { if (!dlg.querySelector('#tNota').value.trim()) { toast('Descreva o tratamento'); return false; } return true; },
     aoConfirmar(dlg) {
-      c.tratamentos = c.tratamentos || {};
-      c.tratamentos[itemId] = { nota: dlg.querySelector('#tNota').value.trim(), por: dlg.querySelector('#tPor').value.trim(), em: agora() };
+      D().tratamentos.push({ id: c.id + ':' + itemId, confId: c.id, itemId, nota: dlg.querySelector('#tNota').value.trim(), por: dlg.querySelector('#tPor').value.trim(), em: agora() });
       DB.salvar(); toast('Divergência tratada'); render();
     }
   });
@@ -751,15 +766,23 @@ VIEWS.ajustes = () => {
       <p class="small muted" style="margin:0">Para mandar num <b>grupo</b>, use “Enviar relatório” e escolha o grupo (o WhatsApp não permite abrir grupos direto pelo link).</p>
       <button class="btn primary full" data-a="salvar-alertas">Salvar contatos</button>
     </div>
+    <div class="card stack"><h2>Nuvem</h2>
+      ${Nuvem.ativa()
+        ? `<p class="small" style="margin:0">Conectado como <b>${esc(Nuvem.sessao.email)}</b>.<br><span class="muted">Última sincronização: ${Nuvem.sinc.ultima ? fmt(Nuvem.sinc.ultima, true) : 'ainda não'} · ${Nuvem.contarPendentes()} alteração(ões) aguardando envio</span></p>
+           <button class="btn full" data-a="sinc-agora">Sincronizar agora</button>
+           <button class="btn danger full" data-a="sair">Sair da conta neste aparelho</button>`
+        : `<p class="small muted" style="margin:0">Sem login, os dados ficam só neste aparelho. Entrando, eles vão para a nuvem e os outros aparelhos da equipe veem o mesmo controle.</p>
+           <button class="btn primary full" data-a="ir-login">Entrar na conta da equipe</button>`}
+    </div>
     <div class="card stack"><h2>Dados</h2>
-      <p class="small muted" style="margin:0">Os dados ficam só neste aparelho. Faça backup com frequência.</p>
+      <p class="small muted" style="margin:0">${Nuvem.ativa() ? 'Os dados são salvos na nuvem automaticamente. O backup é uma cópia extra.' : 'Os dados ficam só neste aparelho. Faça backup com frequência.'}</p>
       <button class="btn full" data-a="backup">Exportar backup (.json)</button>
       <button class="btn full" data-a="restaurar">Restaurar backup</button>
       <button class="btn full" data-a="csv">Exportar conferências (.csv / Excel)</button>
-      <button class="btn danger full" data-a="apagar">Apagar todos os dados</button>
+      ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.2 · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.3 · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -774,7 +797,7 @@ function exportarCSV() {
   const cel = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const linhas = [['Data', 'Turno', 'Responsável', 'Código', 'Ferramenta', 'Local', 'Anterior', 'Contado', 'Diferença', 'Motivo', 'Tratamento']];
   for (const c of [...D().conferencias].sort((a, b) => (a.fechadaEm > b.fechadaEm ? 1 : -1)))
-    for (const l of c.linhas) { const t = (c.tratamentos || {})[l.itemId]; linhas.push([fmt(c.fechadaEm, true), c.turno, c.responsavel, l.codigo, l.nome, l.local, l.esperado, l.contado, l.contado - l.esperado, l.justificativa, t ? t.nota : '']); }
+    for (const l of c.linhas) { const t = tratamentoDe(c.id, l.itemId); linhas.push([fmt(c.fechadaEm, true), c.turno, c.responsavel, l.codigo, l.nome, l.local, l.esperado, l.contado, l.contado - l.esperado, l.justificativa, t ? t.nota : '']); }
   baixar(`conferencias-${hoje()}.csv`, '﻿' + linhas.map((r) => r.map(cel).join(';')).join('\r\n'), 'text/csv');
 }
 function restaurar(e) {
@@ -784,11 +807,221 @@ function restaurar(e) {
     let d;
     try { d = JSON.parse(rd.result); } catch (err) { return toast('Arquivo inválido'); }
     if (!d || !Array.isArray(d.itens) || !Array.isArray(d.conferencias)) return toast('Não é um backup da Ferramentaria');
-    modal({ titulo: 'Restaurar backup?', corpo: `<p>O backup tem <b>${d.itens.length}</b> ferramentas e <b>${d.conferencias.length}</b> conferências. Os dados atuais deste aparelho serão <b>substituídos</b>.</p>`, ok: 'Restaurar',
-      aoConfirmar() { localStorage.setItem(CHAVE, JSON.stringify(d)); DB.carregar(); DB.salvar(); toast('Backup restaurado'); ir('inicio'); render(); } });
+    modal({ titulo: 'Restaurar backup?', corpo: `<p>O backup tem <b>${d.itens.length}</b> ferramentas e <b>${d.conferencias.length}</b> conferências. ${Nuvem.ativa() ? 'Os registros do backup serão enviados à nuvem, <b>somando</b> aos que já existem lá.' : 'Os dados atuais deste aparelho serão <b>substituídos</b>.'}</p>`, ok: 'Restaurar',
+      aoConfirmar() { d.dispositivo = D().dispositivo; d.rascunho = D().rascunho; localStorage.setItem(CHAVE, JSON.stringify(d)); DB.carregar(); DB.salvar(); toast('Backup restaurado'); ir('inicio'); render(); } });
   };
   rd.readAsText(f);
   e.target.value = '';
+}
+
+/* ---------- Nuvem (Supabase) ----------
+   Local primeiro: o app grava no aparelho e envia quando há internet.
+   - Envio: cada registro tem uma "impressão digital"; manda só o que mudou desde o último envio.
+   - Recebimento: busca o que mudou na nuvem desde a última busca (hora do servidor, com 2 min de folga).
+   - Conflito (mesmo registro alterado em 2 aparelhos antes de sincronizar): vale o último envio.
+   Só leitura/gravação com login; as regras de acesso estão em supabase/*.sql. */
+const SUPA_URL = 'https://blizyewnlcyaxizwlzdk.supabase.co';
+const SUPA_KEY = 'sb_publishable_F82gpF8qtfC-cezTvYzEwQ_n0ZGAR4A';  // chave pública (segura com as regras de acesso)
+const COLECOES = ['config', 'itens', 'movs', 'conferencias', 'tratamentos'];
+
+// JSON com chaves em ordem fixa: o banco reordena as chaves e a impressão digital precisa bater.
+function estavel(v) {
+  if (Array.isArray(v)) return '[' + v.map(estavel).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ':' + estavel(v[k])).join(',') + '}';
+  return v === undefined ? 'null' : JSON.stringify(v);
+}
+function digital(obj) {
+  const t = estavel(obj);
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619); h2 = Math.imul(h2 ^ c, 2246822519); }
+  return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36) + t.length.toString(36);
+}
+
+const Nuvem = {
+  sessao: null, sinc: null, rodando: false, deNovo: false, timer: null, estado: 'ok', erro: '',
+  carregar() {
+    try { this.sessao = JSON.parse(localStorage.getItem('ferramentaria_sessao')); } catch (e) { this.sessao = null; }
+    try { this.sinc = JSON.parse(localStorage.getItem('ferramentaria_sinc')); } catch (e) { this.sinc = null; }
+    if (!this.sinc) this.sinc = { cursor: {}, enviado: {}, ultima: null };
+    for (const c of COLECOES) this.sinc.enviado[c] = this.sinc.enviado[c] || {};
+  },
+  guardar() {
+    try {
+      localStorage.setItem('ferramentaria_sessao', JSON.stringify(this.sessao));
+      localStorage.setItem('ferramentaria_sinc', JSON.stringify(this.sinc));
+    } catch (e) {}
+  },
+  ativa() { return !!this.sessao; },
+  precisaLogin() {
+    let local = false;
+    try { local = localStorage.getItem('ferramentaria_modo') === 'local'; } catch (e) {}
+    return this.sessao ? !!this.sessao.expirada : !local;
+  },
+  sair() {
+    this.sessao = null; this.sinc = { cursor: {}, enviado: {}, ultima: null };
+    for (const c of COLECOES) this.sinc.enviado[c] = {};
+    this.guardar();
+  },
+
+  /* -- login -- */
+  async auth(corpo, tipo) {
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=${tipo}`, { method: 'POST', headers: { apikey: SUPA_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(d.error_description || d.msg || d.message || 'Falha no login'); e.status = r.status; e.codigo = d.error_code || d.error; throw e; }
+    this.sessao = { token: d.access_token, refresh: d.refresh_token, expira: Date.now() + d.expires_in * 1000, email: (d.user && d.user.email) || (this.sessao && this.sessao.email) };
+    this.guardar();
+  },
+  async token() {
+    if (Date.now() > this.sessao.expira - 60000) {
+      try { await this.auth({ refresh_token: this.sessao.refresh }, 'refresh_token'); }
+      catch (e) { if (e.status === 400 || e.status === 401 || e.status === 403) { this.sessao.expirada = true; this.guardar(); } throw e; }
+    }
+    return this.sessao.token;
+  },
+  async api(caminho, opt = {}) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/${caminho}`, Object.assign({}, opt, {
+      headers: Object.assign({ apikey: SUPA_KEY, Authorization: 'Bearer ' + await this.token(), 'Content-Type': 'application/json' }, opt.headers || {})
+    }));
+    if (!r.ok) { const e = new Error(`${r.status} ${(await r.text()).slice(0, 200)}`); e.status = r.status; throw e; }
+    const txt = await r.text();
+    return txt ? JSON.parse(txt) : null;
+  },
+
+  /* -- registros locais por coleção -- */
+  registros(col) { return col === 'config' ? [['config', D().config]] : D()[col].map((x) => [x.id, x]); },
+  obter(col, id) { return col === 'config' ? D().config : D()[col].find((x) => x.id === id); },
+  aplicar(col, id, dados) {
+    if (col === 'config') { DB.dados.config = Object.assign(DB.vazio().config, dados); return; }
+    const atual = D()[col].find((x) => x.id === id);
+    if (atual) { for (const k of Object.keys(atual)) delete atual[k]; Object.assign(atual, dados); }  // mantém a mesma referência
+    else D()[col].push(dados);
+  },
+  contarPendentes() {
+    if (!this.ativa()) return 0;
+    let n = 0;
+    for (const col of COLECOES) { const env = this.sinc.enviado[col]; for (const [id, obj] of this.registros(col)) if (env[id] !== digital(obj)) n++; }
+    return n;
+  },
+  receber(col, linha, primeira) {
+    const env = this.sinc.enviado[col];
+    const dRemoto = digital(linha.dados);
+    const local = this.obter(col, linha.id);
+    if (local) {
+      const dLocal = digital(local);
+      if (dLocal === dRemoto) { env[linha.id] = dRemoto; return false; }
+      // Alterado aqui e ainda não enviado: o envio vai atualizar a nuvem.
+      // Exceção: na 1ª sincronização os ajustes da nuvem prevalecem sobre os padrões de um aparelho novo.
+      if (env[linha.id] !== dLocal && !(col === 'config' && primeira)) return false;
+    }
+    this.aplicar(col, linha.id, linha.dados);
+    env[linha.id] = dRemoto;
+    return true;
+  },
+
+  /* -- sincronização -- */
+  agendar(ms = 1500) {
+    if (!this.ativa()) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.sincronizar(), ms);
+  },
+  async sincronizar() {
+    if (!this.ativa() || this.sessao.expirada) return;
+    if (this.rodando) { this.deNovo = true; return; }
+    if (!navigator.onLine) { this.estado = 'offline'; this.mostrar(); return; }
+    this.rodando = true; this.estado = 'enviando'; this.mostrar();
+    let chegou = false;
+    try {
+      // 1) Recebe o que mudou na nuvem
+      for (const col of COLECOES) {
+        const primeira = this.sinc.cursor[col] == null;  // nunca buscou esta coleção neste aparelho
+        const cursor = this.sinc.cursor[col] || 0;
+        const desde = new Date(Math.max(0, cursor - 120000)).toISOString();
+        let maior = cursor;
+        for (let offset = 0; ; offset += 1000) {
+          const linhas = await this.api(`${col}?select=id,dados,sinc_em&sinc_em=gte.${encodeURIComponent(desde)}&order=sinc_em.asc,id.asc&limit=1000&offset=${offset}`);
+          for (const l of linhas) { if (this.receber(col, l, primeira)) chegou = true; maior = Math.max(maior, Date.parse(l.sinc_em)); }
+          if (linhas.length < 1000) break;
+        }
+        this.sinc.cursor[col] = maior;
+      }
+      if (chegou) DB.salvar(true);
+      // 2) Envia o que mudou aqui
+      for (const col of COLECOES) {
+        const env = this.sinc.enviado[col];
+        const lote = [];
+        for (const [id, obj] of this.registros(col)) { const d = digital(obj); if (env[id] !== d) lote.push({ id, d, corpo: JSON.stringify({ id, dados: obj, dispositivo: D().dispositivo }) }); }
+        for (let i = 0; i < lote.length; i += 200) {
+          const parte = lote.slice(i, i + 200);
+          await this.api(`${col}?on_conflict=id`, { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: '[' + parte.map((x) => x.corpo).join(',') + ']' });
+          for (const x of parte) env[x.id] = x.d;
+        }
+      }
+      this.sinc.ultima = agora();
+      this.estado = 'ok'; this.erro = '';
+    } catch (e) {
+      this.estado = !navigator.onLine || e instanceof TypeError ? 'offline' : 'erro';
+      this.erro = e.message;
+      if (this.sessao && this.sessao.expirada) { this.guardar(); this.rodando = false; render(); return; }
+    }
+    this.guardar();
+    this.rodando = false;
+    this.mostrar();
+    // Mostra o que chegou de outros aparelhos, sem atrapalhar quem está digitando ou contando
+    const ae = document.activeElement;
+    if (chegou && !$('#dlg').open && !(rota().nome === 'conferir' && D().rascunho) && !(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) render();
+    if (this.deNovo) { this.deNovo = false; this.agendar(300); }
+  },
+  textoEstado() {
+    const n = this.contarPendentes();
+    const ult = this.sinc.ultima ? 'Última sincronização: ' + fmt(this.sinc.ultima) : 'Ainda não sincronizado';
+    if (this.estado === 'offline') return `Sem internet. ${n} alteração(ões) serão enviadas quando o sinal voltar.`;
+    if (this.estado === 'erro') return `Erro ao sincronizar (${this.erro.slice(0, 80)}). ${n} pendente(s).`;
+    if (this.estado === 'enviando') return 'Sincronizando…';
+    return `${ult}.${n ? ` ${n} pendente(s).` : ' Tudo salvo na nuvem.'}`;
+  },
+  mostrar() {
+    const el = document.getElementById('sincSt');
+    if (!el) return;
+    const n = this.estado === 'enviando' ? 0 : this.contarPendentes();
+    el.className = 'sinc ' + this.estado;
+    el.textContent = this.estado === 'enviando' ? '☁ ↻' : this.estado === 'offline' ? `☁ sem sinal${n ? ' · ' + n : ''}` : this.estado === 'erro' ? '☁ ⚠' : n ? `☁ ${n}` : '☁ ✓';
+  }
+};
+
+function telaLogin() {
+  const exp = Nuvem.sessao && Nuvem.sessao.expirada;
+  $('#top').innerHTML = '<h1>Ferramentaria</h1>';
+  $('#tabs').innerHTML = '';
+  $('#app').innerHTML = `
+    <div class="card stack" style="margin-top:16px">
+      <div style="font-size:20px;font-weight:800">${exp ? 'Entre de novo' : 'Entrar na conta da equipe'}</div>
+      <p class="small muted" style="margin:0">${exp ? 'A sessão expirou. Os dados deste aparelho estão guardados e serão enviados ao entrar.' : 'Com login, os dados ficam salvos na nuvem e todos os aparelhos da equipe veem o mesmo controle. O app continua funcionando sem internet.'}</p>
+      <div><label class="f" for="lgEmail">E-mail</label><input id="lgEmail" type="email" autocomplete="username" inputmode="email" value="${esc(Nuvem.sessao ? Nuvem.sessao.email : '')}"></div>
+      <div><label class="f" for="lgSenha">Senha</label><input id="lgSenha" type="password" autocomplete="current-password"></div>
+      <button class="btn big primary" data-a="entrar">Entrar</button>
+      ${exp ? '' : '<button class="btn full" data-a="modo-local">Usar sem nuvem (só neste aparelho)</button>'}
+    </div>`;
+  $('#lgSenha').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
+}
+async function entrar() {
+  const email = $('#lgEmail').value.trim(), senha = $('#lgSenha').value;
+  if (!email || !senha) return toast('Informe e-mail e senha');
+  if (!navigator.onLine) return toast('É preciso internet para entrar');
+  const b = $('[data-a=entrar]'); b.disabled = true; b.textContent = 'Entrando…';
+  try {
+    const antes = Nuvem.sessao && Nuvem.sessao.email;
+    if (antes && antes.toLowerCase() !== email.toLowerCase()) { b.disabled = false; b.textContent = 'Entrar'; return toast('Use a mesma conta (' + antes + ') ou saia dela em Ajustes'); }
+    await Nuvem.auth({ email, password: senha }, 'password');
+    try { localStorage.removeItem('ferramentaria_modo'); } catch (e) {}
+    ir('inicio'); render();
+    toast('Conectado. Sincronizando…');
+    await Nuvem.sincronizar();
+    toast(Nuvem.estado === 'ok' ? 'Dados sincronizados com a nuvem' : Nuvem.textoEstado());
+    render();
+  } catch (e) {
+    b.disabled = false; b.textContent = 'Entrar';
+    toast(e.status === 400 ? 'E-mail ou senha incorretos' : e instanceof TypeError ? 'Sem conexão com a nuvem' : 'Erro: ' + e.message);
+  }
 }
 
 /* ---------- Modal genérico ---------- */
@@ -869,6 +1102,19 @@ const ACOES = {
     cfg.cegas = $('#cfCegas').checked;
     DB.salvar(); toast('Ajustes salvos'); render();
   },
+  entrar: () => entrar(),
+  'modo-local': () => modal({ titulo: 'Usar sem nuvem?', corpo: '<p>Os dados ficarão só neste aparelho e não aparecem nos outros. Dá para entrar na conta depois, em Ajustes → Nuvem; o que estiver aqui sobe junto.</p>', ok: 'Usar sem nuvem',
+    aoConfirmar() { try { localStorage.setItem('ferramentaria_modo', 'local'); } catch (e) {} render(); } }),
+  'ir-login': () => { try { localStorage.removeItem('ferramentaria_modo'); } catch (e) {} render(); },
+  'sinc-agora': async () => { await Nuvem.sincronizar(); toast(Nuvem.estado === 'ok' ? 'Sincronizado' : Nuvem.textoEstado()); VIEWS.ajustes(); },
+  'sinc-info': () => toast(Nuvem.textoEstado()),
+  sair: async () => {
+    if (navigator.onLine) await Nuvem.sincronizar();
+    const n = Nuvem.contarPendentes();
+    modal({ titulo: 'Sair da conta neste aparelho?', perigo: true, ok: 'Sair',
+      corpo: `<p>Os dados continuam salvos na nuvem; a cópia deste aparelho será apagada.</p>${n ? `<p style="color:var(--bad)"><b>Atenção:</b> ${n} alteração(ões) ainda não foram enviadas (sem internet?) e serão perdidas.</p>` : ''}${D().rascunho ? '<p>A conferência em andamento será descartada.</p>' : ''}`,
+      aoConfirmar() { const disp = D().dispositivo; DB.dados = DB.vazio(); DB.dados.dispositivo = disp; DB.salvar(true); Nuvem.sair(); ajustesLiberado = false; ir('inicio'); render(); } });
+  },
   backup: () => baixar(`ferramentaria-backup-${hoje()}.json`, JSON.stringify(D(), null, 1), 'application/json'),
   restaurar: () => $('#arqBackup').click(),
   csv: exportarCSV,
@@ -889,7 +1135,13 @@ window.addEventListener('hashchange', render);
 
 /* ---------- Início ---------- */
 DB.carregar();
+Nuvem.carregar();
 render();
+Nuvem.sincronizar();
+window.addEventListener('online', () => Nuvem.sincronizar());
+window.addEventListener('offline', () => { Nuvem.estado = 'offline'; Nuvem.mostrar(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Nuvem.sincronizar(); });
+setInterval(() => { if (document.visibilityState === 'visible') Nuvem.sincronizar(); }, 60000);
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 </script>

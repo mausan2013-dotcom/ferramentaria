@@ -21,9 +21,18 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - **PIN do supervisor** (opcional) trava a tela de Ajustes. Só o hash com sal fica gravado; 5 erros = espera de 30s.
   Se o PIN for esquecido, não há recuperação pelo app.
 
-## Preparado para sincronizar (etapa futura)
-Dados em `localStorage` (chave `ferramentaria_v1`), todos os registros com `id` único, datas ISO e
-`dispositivo`. Para vários aparelhos, trocar o objeto `DB` por um banco na nuvem (ex.: Supabase/Firebase).
+## Nuvem (Supabase) — desde a v1.3
+- Projeto Supabase `blizyewnlcyaxizwlzdk` (região São Paulo), conta no e-mail pessoal. Cadastro público desligado;
+  logins criados em Authentication → Users (um login por aparelho, pode ser o mesmo nos vários aparelhos).
+- Scripts em `supabase/`: `01-tabelas.sql` (tabelas, regras de acesso, visões), `02-permissoes.sql`,
+  `03-limpar-dados.sql` (apaga tudo da nuvem — só para limpar testes).
+- Local primeiro: grava no aparelho (`ferramentaria_v1`) e sincroniza quando há internet (ao abrir, ao voltar o sinal,
+  1,5 s após cada alteração e a cada 60 s). Envia só o que mudou (impressão digital por registro); recebe pelo
+  `sinc_em` do servidor. Conflito no mesmo registro: vale o último envio. Na 1ª sincronização de um aparelho,
+  os Ajustes da nuvem prevalecem.
+- A conferência em andamento (rascunho) fica só no aparelho até ser encerrada.
+- Para Excel/Power BI: visões `v_ferramentas`, `v_movimentacoes`, `v_conferencia_linhas` (Table Editor → exportar CSV).
+- Ninguém apaga registros pelo app; exclusões só pelo painel do Supabase.
 
 ## Versão 1.0 (02/10/2026)
 - Cadastro (individual e importação em lista), locais, categorias, desativação com baixa automática
@@ -37,3 +46,10 @@ Dados em `localStorage` (chave `ferramentaria_v1`), todos os registros com `id` 
 ## Versão 1.2 (02/10/2026)
 - Contatos para alerta de divergência (nome; DDD e número) e abertura automática do WhatsApp com a mensagem pronta
 - Botões Enviar/Reenviar por contato, com registro de quando foi aberto, no resultado e no histórico
+
+## Versão 1.3 (03/10/2026)
+- Login da equipe e sincronização com a nuvem (Supabase), funcionando sem sinal e enviando ao voltar
+- Indicador ☁ no topo (✓ salvo, ↻ enviando, sem sinal · N pendentes, ⚠ erro); toque para detalhes
+- Ajustes → Nuvem: conta, última sincronização, sincronizar agora, sair da conta (limpa o aparelho)
+- Opção "Usar sem nuvem"; ao entrar depois, os dados do aparelho sobem para a nuvem
+- Tratamentos de divergência viraram registros próprios (migração automática da v1.2)
