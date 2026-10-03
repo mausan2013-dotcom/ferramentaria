@@ -95,3 +95,6 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 ## Versão 1.9 (03/10/2026)
 - Logo da Rumo (SVG oficial do rumolog.com, uso autorizado pela empresa segundo o usuário) no topo de todas as telas
   e em destaque no login, com a indicação "ferramenta interna"; cor acompanha o tema (marinho/branco)
+
+## Versão 1.10 (03/10/2026)
+- Texto sob o logo no login: "FERRAMENTARIA INTELIGENTE - REVISTAMENTO ZTO"

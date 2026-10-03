@@ -815,7 +815,7 @@ VIEWS.ajustes = () => {
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.9 · ferramenta interna · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.10 · ferramenta interna · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -1121,7 +1121,7 @@ function telaLogin() {
   $('#top').innerHTML = LOGO_RUMO + '<span class="divisor"></span><h1>Ferramentaria</h1>';
   $('#tabs').innerHTML = '';
   $('#app').innerHTML = `
-    <div class="login-marca">${LOGO_RUMO}<div>Ferramentaria · ferramenta interna</div></div>
+    <div class="login-marca">${LOGO_RUMO}<div>FERRAMENTARIA INTELIGENTE - REVISTAMENTO ZTO</div></div>
     <div class="card stack" style="margin-top:16px">
       <div style="font-size:20px;font-weight:800">${exp ? 'Entre de novo' : 'Entrar na conta da equipe'}</div>
       <p class="small muted" style="margin:0">${exp ? 'A sessão expirou. Os dados deste aparelho estão guardados e serão enviados ao entrar.' : 'Com login, os dados ficam salvos na nuvem e todos os aparelhos da equipe veem o mesmo controle. O app continua funcionando sem internet.'}</p>
