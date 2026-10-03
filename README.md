@@ -18,14 +18,17 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - **Alertas por WhatsApp em 1 toque**: contatos em Ajustes; ao fechar com divergência o WhatsApp abre na conversa
   do 1º contato com a mensagem pronta (os outros têm botão na tela de resultado). Envio sem toque = etapa da nuvem
   (API oficial do WhatsApp/Meta + servidor).
-- **PIN do supervisor** (opcional) trava a tela de Ajustes. Só o hash com sal fica gravado; 5 erros = espera de 30s.
-  Se o PIN for esquecido, não há recuperação pelo app.
+- **Níveis de acesso** (v1.5, substituem o PIN): login **técnico** (padrão) confere turnos, registra motivos, vê histórico
+  e envia relatórios; login **supervisor** também mexe em Ajustes, ferramentas, entradas/baixas e trata divergências.
+  A regra vale na nuvem (RLS). Definir nível no SQL Editor: `select public.definir_papel('email', 'supervisor');`
+  Sem nuvem, o aparelho tem acesso total.
 
 ## Nuvem (Supabase) — desde a v1.3
 - Projeto Supabase `blizyewnlcyaxizwlzdk` (região São Paulo), conta no e-mail pessoal. Cadastro público desligado;
   logins criados em Authentication → Users (um login por aparelho, pode ser o mesmo nos vários aparelhos).
 - Scripts em `supabase/`: `01-tabelas.sql` (tabelas, regras de acesso, visões), `02-permissoes.sql`,
-  `03-limpar-dados.sql` (apaga tudo da nuvem — só para limpar testes).
+  `03-limpar-dados.sql` (apaga tudo da nuvem — só para limpar testes),
+  `04-niveis-acesso.sql` (tabela `perfis`, funções `eh_supervisor` e `definir_papel`, regras por nível).
 - Local primeiro: grava no aparelho (`ferramentaria_v1`) e sincroniza quando há internet (ao abrir, ao voltar o sinal,
   1,5 s após cada alteração e a cada 60 s). Envia só o que mudou (impressão digital por registro); recebe pelo
   `sinc_em` do servidor. Conflito no mesmo registro: vale o último envio. Na 1ª sincronização de um aparelho,
@@ -59,3 +62,8 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
   fundo #ebf0f2, fonte Open Sans (guardada para uso offline), cantos retos, bloco de status com canto cortado,
   abas em maiúsculas com marcador azul; tema escuro em azul-marinho; ícone novo
 - Logo da empresa NÃO incluído: o site é público e o app ainda é teste sem aval formal (aguarda autorização)
+
+## Versão 1.5 (03/10/2026)
+- Níveis de acesso por login (técnico x supervisor), validados também na nuvem; PIN removido
+- Técnico vê a aba "Conta" no lugar de "Ajustes"; botões de cadastro, entrada/baixa e "Tratar" só para supervisor
+- O técnico envia à nuvem só conferências; o resto que mudar no aparelho dele é substituído pela versão da nuvem

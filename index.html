@@ -144,8 +144,8 @@ const DB = {
     return {
       versao: 1,
       dispositivo: uid(),
-      // senha = {sal, hash} do PIN do supervisor; contatos = [{nome, numero}] para alertas
-      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false, senha: null, contatos: [], whatsAuto: true },
+      // contatos = [{nome, numero}] para alertas
+      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false, contatos: [], whatsAuto: true },
       itens: [],         // {id, codigo, nome, categoria, local, obs, ativo, criadoEm, atualizadoEm}
       movs: [],          // {id, itemId, qtd (+/-), tipo, motivo, por, em}
       conferencias: [],  // {id, turno, responsavel, iniciadaEm, fechadaEm, linhas[], envios{}}
@@ -158,6 +158,7 @@ const DB = {
     if (!this.dados || !this.dados.versao) this.dados = this.vazio();
     const v = this.vazio();
     this.dados.config = Object.assign(v.config, this.dados.config || {});
+    delete this.dados.config.senha;  // PIN das versões 1.1–1.4: substituído pelos níveis de acesso
     for (const k of ['itens', 'movs', 'conferencias', 'tratamentos']) if (!Array.isArray(this.dados[k])) this.dados[k] = [];
     // v1.2 guardava os tratamentos dentro da conferência; agora são registros próprios (sincronizam sem conflito)
     for (const c of this.dados.conferencias) if (c.tratamentos) {
@@ -202,6 +203,10 @@ const D = () => DB.dados;
 const itensAtivos = () => D().itens.filter((i) => i.ativo !== false)
   .sort((a, b) => (a.local || '').localeCompare(b.local || '', 'pt') || a.nome.localeCompare(b.nome, 'pt'));
 const itemPorId = (id) => D().itens.find((i) => i.id === id);
+// Nível de acesso: vem do login (tabela perfis na nuvem). Sem nuvem, o aparelho tem acesso total.
+const supervisor = () => !Nuvem.ativa() || Nuvem.sessao.papel === 'supervisor';
+const SO_SUPERVISOR = new Set(['novo-item', 'editar-item', 'mov', 'importar', 'desativar', 'reativar', 'tratar',
+  'salvar-cfg', 'salvar-alertas', 'backup', 'restaurar', 'csv', 'apagar', 'sair']);
 const tratamentoDe = (confId, itemId) => D().tratamentos.find((t) => t.id === confId + ':' + itemId);
 const ultimaConferencia = () => D().conferencias.reduce((u, c) => (!u || c.fechadaEm > u.fechadaEm ? c : u), null);
 
@@ -263,8 +268,7 @@ function render() {
   if (Nuvem.precisaLogin()) return telaLogin();
   const r = rota();
   const aba = { conf: 'historico', item: 'ferramentas', resultado: 'conferir' }[r.nome] || r.nome;
-  $('#tabs').innerHTML = ABAS.map(([k, n]) => `<a href="#${k}" class="${k === aba ? 'on' : ''}">${ICONES[k]}${n}</a>`).join('');
-  if (r.nome !== 'ajustes') ajustesLiberado = false;  // saiu dos Ajustes: trava de novo
+  $('#tabs').innerHTML = ABAS.map(([k, n]) => `<a href="#${k}" class="${k === aba ? 'on' : ''}">${ICONES[k]}${k === 'ajustes' && !supervisor() ? 'Conta' : n}</a>`).join('');
   const v = VIEWS[r.nome] || VIEWS.inicio;
   v(r.arg);
   window.scrollTo(0, 0);
@@ -295,11 +299,11 @@ VIEWS.inicio = () => {
       <div class="kpi"><b style="color:${pend.length ? 'var(--bad)' : 'inherit'}">${pend.length}</b><span>alertas pendentes</span></div>
     </div>
     ${itens.length ? `<button class="btn big primary" data-a="ir" data-h="conferir">${rasc ? 'Continuar conferência em andamento' : 'Iniciar conferência de turno'}</button>`
-      : `<button class="btn big primary" data-a="novo-item">Cadastrar primeira ferramenta</button>`}
+      : supervisor() ? `<button class="btn big primary" data-a="novo-item">Cadastrar primeira ferramenta</button>` : '<div class="card muted">Nenhuma ferramenta cadastrada. O cadastro é feito pelo supervisor.</div>'}
     ${pend.length ? `<div class="group-h">Alertas pendentes</div><div class="list">${pend.map(({ c, l }) => `
       <div class="li alerta"><div class="grow"><div class="t">${esc(l.nome)} <span class="tag bad">${difTexto(l.contado - l.esperado)}</span></div>
       <div class="s">${esc(c.turno)} · ${fmt(c.fechadaEm)} · ${esc(c.responsavel)}${l.justificativa ? ' · “' + esc(l.justificativa) + '”' : ''}</div></div>
-      <button class="btn" data-a="tratar" data-c="${c.id}" data-i="${l.itemId}">Tratar</button></div>`).join('')}</div>` : ''}
+      ${supervisor() ? `<button class="btn" data-a="tratar" data-c="${c.id}" data-i="${l.itemId}">Tratar</button>` : ''}</div>`).join('')}</div>` : ''}
   `;
 };
 
@@ -516,7 +520,7 @@ VIEWS.ferramentas = () => {
   const grupos = {};
   for (const i of lista) (grupos[i.ativo === false ? 'Desativados' : (i.local || 'Sem local')] ||= []).push(i);
   $('#app').innerHTML = `
-    <div class="row" style="margin-bottom:10px"><button class="btn primary grow" data-a="novo-item">+ Nova ferramenta</button><button class="btn" data-a="importar">Importar lista</button></div>
+    ${supervisor() ? '<div class="row" style="margin-bottom:10px"><button class="btn primary grow" data-a="novo-item">+ Nova ferramenta</button><button class="btn" data-a="importar">Importar lista</button></div>' : ''}
     ${todos.length ? `<input id="fIt" type="search" placeholder="Buscar" value="${esc(filtroItens)}">` : ''}
     ${Object.entries(grupos).map(([g, l]) => `<div class="group-h">${esc(g)}</div><div class="list">${l.map((i) => `
       <a class="li" href="#item/${i.id}"><div class="grow"><div class="t">${esc(i.nome)}</div><div class="s">${[i.codigo, i.categoria].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</div></div><span class="qty">${i.ativo === false ? '—' : esperado(i.id)}</span></a>`).join('')}</div>`).join('')
@@ -537,15 +541,15 @@ VIEWS.item = (id) => {
       ${i.obs ? `<div class="small" style="margin-top:4px">${esc(i.obs)}</div>` : ''}
       ${i.ativo === false ? '<span class="tag warn">Desativado</span>' : ''}</div>
       <div style="text-align:right"><div class="qty">${i.ativo === false ? '—' : esperado(i.id)}</div><div class="small muted">esperado</div></div></div></div>
-    <div class="row" style="margin-bottom:12px">
+    ${supervisor() ? `<div class="row" style="margin-bottom:12px">
       <button class="btn grow" data-a="editar-item" data-i="${id}">Editar</button>
       ${i.ativo === false ? `<button class="btn grow" data-a="reativar" data-i="${id}">Reativar</button>` : `<button class="btn primary grow" data-a="mov" data-i="${id}">Entrada / Baixa</button>`}
-    </div>
+    </div>` : ''}
     <div class="group-h">Últimas conferências</div>
     <div class="list">${hist.map((c) => { const l = c.linhas.find((x) => x.itemId === id); const d = l.contado - l.esperado; return `<a class="li" href="#conf/${c.id}"><div class="grow"><div class="t">${esc(c.turno)} · ${fmt(c.fechadaEm)}</div><div class="s">${esc(c.responsavel)}${l.justificativa ? ' · ' + esc(l.justificativa) : ''}</div></div>${d ? `<span class="tag bad">${difTexto(d)}</span>` : ''}<span class="qty">${l.contado}</span></a>`; }).join('') || '<div class="empty">Ainda não conferida.</div>'}</div>
     <div class="group-h">Movimentações</div>
     <div class="list">${movs.map((m) => `<div class="li"><div class="grow"><div class="t">${esc(m.tipo)}${m.motivo ? ' · ' + esc(m.motivo) : ''}</div><div class="s">${fmt(m.em, true)}${m.por ? ' · ' + esc(m.por) : ''}</div></div><span class="qty" style="color:${m.qtd < 0 ? 'var(--bad)' : 'var(--ok)'}">${m.qtd > 0 ? '+' : ''}${m.qtd}</span></div>`).join('') || '<div class="empty">Nenhuma.</div>'}</div>
-    ${i.ativo !== false ? `<button class="btn danger full" data-a="desativar" data-i="${id}">Desativar ferramenta</button>` : ''}`;
+    ${i.ativo !== false && supervisor() ? `<button class="btn danger full" data-a="desativar" data-i="${id}">Desativar ferramenta</button>` : ''}`;
 };
 
 function formItem(i) {
@@ -661,7 +665,7 @@ VIEWS.conf = (id) => {
       return `<div class="li ${d && !t ? 'alerta' : ''}"><div class="grow"><div class="t">${esc(l.nome)}</div>
         <div class="s">${l.codigo ? esc(l.codigo) + ' · ' : ''}anterior ${l.esperado} → contado ${l.contado}${l.justificativa ? ' · “' + esc(l.justificativa) + '”' : ''}</div>
         ${t ? `<div class="s" style="color:var(--ok)">Tratado: ${esc(t.nota)} — ${esc(t.por)} ${fmt(t.em)}</div>` : ''}</div>
-        ${d ? (t ? `<span class="tag warn">${difTexto(d)}</span>` : `<button class="btn" data-a="tratar" data-c="${c.id}" data-i="${l.itemId}">Tratar</button>`) : '<span class="tag ok">ok</span>'}</div>`;
+        ${d ? (t ? `<span class="tag warn">${difTexto(d)}</span>` : supervisor() ? `<button class="btn" data-a="tratar" data-c="${c.id}" data-i="${l.itemId}">Tratar</button>` : `<span class="tag bad">${difTexto(d)}</span>`) : '<span class="tag ok">ok</span>'}</div>`;
     }).join('')}</div>`;
 };
 
@@ -682,92 +686,25 @@ function formTratar(c, itemId) {
   });
 }
 
-/* --- Trava dos Ajustes (PIN do supervisor) ---
-   O PIN não fica gravado: só um hash com sal. É uma trava contra alterações por engano
-   ou sem autorização, não uma proteção contra quem tem acesso técnico ao aparelho. */
-let ajustesLiberado = false;
-let pinErros = 0, pinBloqueadoAte = 0;
-
-async function hashPin(pin, sal) {
-  const txt = sal + ':' + pin;
-  if (window.crypto && crypto.subtle) {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
-    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  }
-  // Reserva para quando o app é aberto fora de HTTPS (crypto.subtle indisponível)
-  let h = 2166136261;
-  for (let k = 0; k < 5000; k++) for (let i = 0; i < txt.length; i++) { h ^= txt.charCodeAt(i) + k; h = Math.imul(h, 16777619) >>> 0; }
-  return 'f' + h.toString(16);
-}
-const pinValido = (p) => /^\d{4,8}$/.test(p);
-
-function telaTravada() {
-  topo('Ajustes');
-  $('#app').innerHTML = `
-    <div class="card stack" style="text-align:center;margin-top:24px">
-      <div style="font-size:42px">🔒</div>
-      <div class="big" style="font-size:20px;font-weight:800">Ajustes protegidos</div>
-      <p class="muted" style="margin:0">Digite o PIN do supervisor para alterar equipe, turnos, backup e dados.</p>
-      <input id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="PIN" style="text-align:center;font-size:26px;letter-spacing:8px">
-      <button class="btn big primary" data-a="desbloquear">Desbloquear</button>
-    </div>`;
-  const i = $('#pinIn');
-  i.focus();
-  i.addEventListener('keydown', (e) => { if (e.key === 'Enter') ACOES.desbloquear(); });
-}
-
-async function desbloquear() {
-  const espera = Math.ceil((pinBloqueadoAte - Date.now()) / 1000);
-  if (espera > 0) return toast(`Muitas tentativas. Aguarde ${espera}s`);
-  const inp = $('#pinIn');
-  const s = D().config.senha;
-  if (await hashPin(inp.value, s.sal) === s.hash) {
-    pinErros = 0; ajustesLiberado = true; VIEWS.ajustes(); return;
-  }
-  pinErros++;
-  inp.value = ''; vibrar(200);
-  if (pinErros >= 5) { pinBloqueadoAte = Date.now() + 30000; pinErros = 0; toast('PIN incorreto. Tente de novo em 30s'); }
-  else toast('PIN incorreto');
-}
-
-function formSenha() {
-  const tem = !!D().config.senha;
-  modal({
-    titulo: tem ? 'Trocar PIN do supervisor' : 'Criar PIN do supervisor',
-    corpo: `<div class="stack">
-      <p class="small muted" style="margin:0">Com o PIN, só quem o conhece entra nos Ajustes (equipe, turnos, backup, restaurar e apagar dados). Use de 4 a 8 números.</p>
-      <div><label class="f">Novo PIN</label><input id="pin1" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="new-password"></div>
-      <div><label class="f">Repita o PIN</label><input id="pin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="new-password"></div>
-      <p class="small" style="margin:0;color:var(--warn)"><b>Anote o PIN em lugar seguro.</b> Se for esquecido, não há como recuperar pelo app.</p></div>`,
-    ok: 'Salvar PIN',
-    validar(dlg) {
-      const a = dlg.querySelector('#pin1').value, b = dlg.querySelector('#pin2').value;
-      if (!pinValido(a)) { toast('O PIN deve ter de 4 a 8 números'); return false; }
-      if (a !== b) { toast('Os PINs não conferem'); return false; }
-      return true;
-    },
-    async aoConfirmar(dlg) {
-      const sal = uid();
-      D().config.senha = { sal, hash: await hashPin(dlg.querySelector('#pin1').value, sal) };
-      DB.salvar(); toast('PIN salvo. Os Ajustes agora estão protegidos'); VIEWS.ajustes();
-    }
-  });
-}
-
 /* --- Ajustes --- */
+function cartaoConta() {
+  return `<div class="card stack"><h2>Conta</h2>
+      <p class="small" style="margin:0">Conectado como <b>${esc(Nuvem.sessao.email)}</b> · nível <span class="tag ${supervisor() ? 'ok' : ''}">${supervisor() ? 'Supervisor' : 'Técnico'}</span><br>
+      <span class="muted">Última sincronização: ${Nuvem.sinc.ultima ? fmt(Nuvem.sinc.ultima, true) : 'ainda não'} · ${Nuvem.contarPendentes()} alteração(ões) aguardando envio</span></p>
+      <button class="btn full" data-a="sinc-agora">Sincronizar agora</button>
+      ${supervisor() ? '<button class="btn danger full" data-a="sair">Sair da conta neste aparelho</button>' : ''}
+    </div>`;
+}
+
 VIEWS.ajustes = () => {
   const cfg = D().config;
-  if (cfg.senha && !ajustesLiberado) return telaTravada();
+  if (!supervisor()) {
+    topo('Conta');
+    $('#app').innerHTML = cartaoConta() + `<p class="small muted" style="padding:0 4px">Ajustes, cadastro de ferramentas, entradas/baixas e tratamento de divergências são feitos pelo supervisor.</p>`;
+    return;
+  }
   topo('Ajustes');
   $('#app').innerHTML = `
-    <div class="card stack"><h2>Proteção</h2>
-      ${cfg.senha
-        ? `<p class="small muted" style="margin:0">🔒 Ajustes protegidos por PIN. Voltam a travar ao sair desta tela.</p>
-           <div class="row"><button class="btn grow" data-a="senha">Trocar PIN</button><button class="btn grow" data-a="bloquear">Travar agora</button></div>
-           <button class="btn danger full" data-a="remover-senha">Remover PIN</button>`
-        : `<p class="small muted" style="margin:0">Qualquer pessoa com o aparelho pode alterar os ajustes e apagar dados. Crie um PIN do supervisor para travar esta tela.</p>
-           <button class="btn primary full" data-a="senha">Criar PIN</button>`}
-    </div>
     <div class="card stack"><h2>Equipe</h2>
       <div><label class="f">Nome da oficina / equipe</label><input id="cfOf" value="${esc(cfg.oficina)}" placeholder="Ex.: Manutenção de vagões – Pátio X"></div>
       <div><label class="f">Turnos (um por linha)</label><textarea id="cfTur">${esc(cfg.turnos.join('\n'))}</textarea></div>
@@ -782,14 +719,9 @@ VIEWS.ajustes = () => {
       <p class="small muted" style="margin:0">Para mandar num <b>grupo</b>, use “Enviar relatório” e escolha o grupo (o WhatsApp não permite abrir grupos direto pelo link).</p>
       <button class="btn primary full" data-a="salvar-alertas">Salvar contatos</button>
     </div>
-    <div class="card stack"><h2>Nuvem</h2>
-      ${Nuvem.ativa()
-        ? `<p class="small" style="margin:0">Conectado como <b>${esc(Nuvem.sessao.email)}</b>.<br><span class="muted">Última sincronização: ${Nuvem.sinc.ultima ? fmt(Nuvem.sinc.ultima, true) : 'ainda não'} · ${Nuvem.contarPendentes()} alteração(ões) aguardando envio</span></p>
-           <button class="btn full" data-a="sinc-agora">Sincronizar agora</button>
-           <button class="btn danger full" data-a="sair">Sair da conta neste aparelho</button>`
-        : `<p class="small muted" style="margin:0">Sem login, os dados ficam só neste aparelho. Entrando, eles vão para a nuvem e os outros aparelhos da equipe veem o mesmo controle.</p>
-           <button class="btn primary full" data-a="ir-login">Entrar na conta da equipe</button>`}
-    </div>
+    ${Nuvem.ativa() ? cartaoConta() : `<div class="card stack"><h2>Nuvem</h2>
+      <p class="small muted" style="margin:0">Sem login, os dados ficam só neste aparelho. Entrando, eles vão para a nuvem e os outros aparelhos da equipe veem o mesmo controle.</p>
+      <button class="btn primary full" data-a="ir-login">Entrar na conta da equipe</button></div>`}
     <div class="card stack"><h2>Dados</h2>
       <p class="small muted" style="margin:0">${Nuvem.ativa() ? 'Os dados são salvos na nuvem automaticamente. O backup é uma cópia extra.' : 'Os dados ficam só neste aparelho. Faça backup com frequência.'}</p>
       <button class="btn full" data-a="backup">Exportar backup (.json)</button>
@@ -798,7 +730,7 @@ VIEWS.ajustes = () => {
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.4 · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.5 · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -903,6 +835,18 @@ const Nuvem = {
     return txt ? JSON.parse(txt) : null;
   },
 
+  /* -- nível de acesso do login (técnico se não houver linha em perfis) -- */
+  async carregarPapel() {
+    let papel = 'tecnico';
+    try { const r = await this.api('perfis?select=papel'); if (r && r[0] && r[0].papel) papel = r[0].papel; }
+    catch (e) { if (e instanceof TypeError || (this.sessao && this.sessao.expirada)) throw e; }  // sem rede: mantém o que já sabia
+    const mudou = this.sessao.papel !== papel;
+    this.sessao.papel = papel; this.guardar();
+    return mudou;
+  },
+  // Técnico só envia conferências; o resto é do supervisor (a nuvem também recusa).
+  podeEnviar(col) { return col === 'conferencias' || this.sessao.papel === 'supervisor'; },
+
   /* -- registros locais por coleção -- */
   registros(col) { return col === 'config' ? [['config', D().config]] : D()[col].map((x) => [x.id, x]); },
   obter(col, id) { return col === 'config' ? D().config : D()[col].find((x) => x.id === id); },
@@ -915,7 +859,7 @@ const Nuvem = {
   contarPendentes() {
     if (!this.ativa()) return 0;
     let n = 0;
-    for (const col of COLECOES) { const env = this.sinc.enviado[col]; for (const [id, obj] of this.registros(col)) if (env[id] !== digital(obj)) n++; }
+    for (const col of COLECOES) { if (!this.podeEnviar(col)) continue; const env = this.sinc.enviado[col]; for (const [id, obj] of this.registros(col)) if (env[id] !== digital(obj)) n++; }
     return n;
   },
   receber(col, linha, primeira) {
@@ -927,7 +871,8 @@ const Nuvem = {
       if (dLocal === dRemoto) { env[linha.id] = dRemoto; return false; }
       // Alterado aqui e ainda não enviado: o envio vai atualizar a nuvem.
       // Exceção: na 1ª sincronização os ajustes da nuvem prevalecem sobre os padrões de um aparelho novo.
-      if (env[linha.id] !== dLocal && !(col === 'config' && primeira)) return false;
+      // (Coleções que este nível não pode enviar: vale sempre a nuvem.)
+      if (env[linha.id] !== dLocal && !(col === 'config' && primeira) && this.podeEnviar(col)) return false;
     }
     this.aplicar(col, linha.id, linha.dados);
     env[linha.id] = dRemoto;
@@ -947,6 +892,7 @@ const Nuvem = {
     this.rodando = true; this.estado = 'enviando'; this.mostrar();
     let chegou = false;
     try {
+      if (await this.carregarPapel()) chegou = true;  // nível mudou: redesenha a tela
       // 1) Recebe o que mudou na nuvem
       for (const col of COLECOES) {
         const primeira = this.sinc.cursor[col] == null;  // nunca buscou esta coleção neste aparelho
@@ -963,6 +909,7 @@ const Nuvem = {
       if (chegou) DB.salvar(true);
       // 2) Envia o que mudou aqui
       for (const col of COLECOES) {
+        if (!this.podeEnviar(col)) continue;
         const env = this.sinc.enviado[col];
         const lote = [];
         for (const [id, obj] of this.registros(col)) { const d = digital(obj); if (env[id] !== d) lote.push({ id, d, corpo: JSON.stringify({ id, dados: obj, dispositivo: D().dispositivo }) }); }
@@ -1085,11 +1032,6 @@ const ACOES = {
   igual: (el) => { const id = el.closest('.cnt').dataset.item; setContagem(id, esperado(id)); },
   compartilhar: (el) => compartilhar(D().conferencias.find((c) => c.id === el.dataset.c)),
   tratar: (el) => formTratar(D().conferencias.find((c) => c.id === el.dataset.c), el.dataset.i),
-  desbloquear: () => desbloquear(),
-  senha: formSenha,
-  bloquear: () => { ajustesLiberado = false; VIEWS.ajustes(); },
-  'remover-senha': () => modal({ titulo: 'Remover PIN?', corpo: '<p>Os Ajustes ficarão abertos para qualquer pessoa com o aparelho.</p>', ok: 'Remover', perigo: true,
-    aoConfirmar() { D().config.senha = null; DB.salvar(); toast('PIN removido'); VIEWS.ajustes(); } }),
   whats: (el) => {
     const c = D().conferencias.find((x) => x.id === el.dataset.c);
     const ct = D().config.contatos.find((x) => x.numero === el.dataset.n);
@@ -1129,7 +1071,7 @@ const ACOES = {
     const n = Nuvem.contarPendentes();
     modal({ titulo: 'Sair da conta neste aparelho?', perigo: true, ok: 'Sair',
       corpo: `<p>Os dados continuam salvos na nuvem; a cópia deste aparelho será apagada.</p>${n ? `<p style="color:var(--bad)"><b>Atenção:</b> ${n} alteração(ões) ainda não foram enviadas (sem internet?) e serão perdidas.</p>` : ''}${D().rascunho ? '<p>A conferência em andamento será descartada.</p>' : ''}`,
-      aoConfirmar() { const disp = D().dispositivo; DB.dados = DB.vazio(); DB.dados.dispositivo = disp; DB.salvar(true); Nuvem.sair(); ajustesLiberado = false; ir('inicio'); render(); } });
+      aoConfirmar() { const disp = D().dispositivo; DB.dados = DB.vazio(); DB.dados.dispositivo = disp; DB.salvar(true); Nuvem.sair(); ir('inicio'); render(); } });
   },
   backup: () => baixar(`ferramentaria-backup-${hoje()}.json`, JSON.stringify(D(), null, 1), 'application/json'),
   restaurar: () => $('#arqBackup').click(),
@@ -1142,6 +1084,7 @@ document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-a]');
   if (!el || el.tagName === 'INPUT' || el.closest('dialog')) return;
   const fn = ACOES[el.dataset.a];
+  if (fn && SO_SUPERVISOR.has(el.dataset.a) && !supervisor()) { e.preventDefault(); return toast('Somente o supervisor pode fazer isso'); }
   if (fn) { e.preventDefault(); fn(el); }
 });
 document.addEventListener('change', (e) => {
