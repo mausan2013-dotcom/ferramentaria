@@ -126,7 +126,7 @@ const DB = {
     return {
       versao: 1,
       dispositivo: uid(),
-      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false, senha: null },  // senha = {sal, hash} do PIN do supervisor
+      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false, senha: null, contatos: [], whatsAuto: true },  // contatos = [{nome, numero}] para alertas  // senha = {sal, hash} do PIN do supervisor
       itens: [],         // {id, codigo, nome, categoria, local, obs, ativo, criadoEm, atualizadoEm}
       movs: [],          // {id, itemId, qtd (+/-), tipo, motivo, por, em}
       conferencias: [],  // {id, turno, responsavel, iniciadaEm, fechadaEm, linhas[], obs, tratamentos{}}
@@ -406,6 +406,9 @@ function confirmarFechamento(linhas) {
   filtroConf = '';
   DB.salvar();
   ir('resultado/' + c.id);
+  // Com divergência: já abre o WhatsApp no primeiro contato (ainda dentro do toque, senão o Android bloqueia)
+  const cts = D().config.contatos;
+  if (D().config.whatsAuto && cts.length && linhas.some((l) => l.contado !== l.esperado)) abrirWhats(c, cts[0]);
 }
 
 VIEWS.resultado = (id) => {
@@ -417,8 +420,9 @@ VIEWS.resultado = (id) => {
     <div class="status ${difs.length ? 'bad' : 'ok'}"><div class="big">${difs.length ? `⚠ ${difs.length} divergência${difs.length > 1 ? 's' : ''}` : '✓ Tudo confere com o turno anterior'}</div>
       <div>${esc(c.turno)} · ${fmt(c.fechadaEm)} · ${esc(c.responsavel)}</div></div>
     ${difs.length ? `<div class="list">${difs.map((l) => `<div class="li"><div class="grow"><div class="t">${esc(l.nome)}</div><div class="s">${l.esperado} → ${l.contado} · ${esc(l.justificativa)}</div></div><span class="tag bad">${difTexto(l.contado - l.esperado)}</span></div>`).join('')}</div>` : ''}
+    ${difs.length ? blocoEnvios(c) : ''}
     <div class="stack">
-      <button class="btn big primary" data-a="compartilhar" data-c="${c.id}">Enviar relatório (WhatsApp, e-mail…)</button>
+      <button class="btn big ${difs.length && D().config.contatos.length ? '' : 'primary'}" data-a="compartilhar" data-c="${c.id}">Enviar relatório (WhatsApp, e-mail…)</button>
       <button class="btn full" data-a="ir" data-h="conf/${c.id}">Ver conferência completa</button>
       <button class="btn full" data-a="ir" data-h="inicio">Voltar ao início</button>
     </div>`;
@@ -436,6 +440,32 @@ function textoRelatorio(c) {
   }
   return t;
 }
+/* --- Alerta por WhatsApp em 1 toque ---
+   Abre a conversa do contato com a mensagem pronta; a pessoa só toca em Enviar.
+   (Envio sem toque exige a API oficial do WhatsApp e um servidor: etapa da nuvem.) */
+function numeroWa(txt) {
+  let n = String(txt || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (n.length === 10 || n.length === 11) n = '55' + n;  // DDD + número, sem código do país
+  return n.length >= 12 && n.length <= 13 ? n : '';
+}
+function abrirWhats(c, ct) {
+  const url = `https://wa.me/${ct.numero}?text=${encodeURIComponent(textoRelatorio(c))}`;
+  c.envios = c.envios || {};
+  c.envios[ct.numero] = agora();
+  DB.salvar();
+  if (!window.open(url, '_blank')) location.href = url;
+  setTimeout(() => { if (rota().nome === 'resultado' || rota().nome === 'conf') render(); }, 300);
+}
+function blocoEnvios(c) {
+  const cts = D().config.contatos;
+  if (!cts.length) return `<div class="card small muted">Dica: cadastre em <b>Ajustes → Alertas por WhatsApp</b> quem deve ser avisado; o app abre a conversa pronta ao fechar com divergência.</div>`;
+  const env = c.envios || {};
+  const prox = cts.find((ct) => !env[ct.numero]);
+  return `<div class="group-h">Avisar pelo WhatsApp</div><div class="list">${cts.map((ct) => `
+    <div class="li"><div class="grow"><div class="t">${esc(ct.nome)}</div><div class="s">${env[ct.numero] ? '✓ aberto no WhatsApp ' + fmt(env[ct.numero]) : '+' + esc(ct.numero)}</div></div>
+    <button class="btn ${ct === prox ? 'primary' : ''}" data-a="whats" data-c="${c.id}" data-n="${esc(ct.numero)}">${env[ct.numero] ? 'Reenviar' : 'Enviar'}</button></div>`).join('')}</div>`;
+}
+
 async function compartilhar(c) {
   const texto = textoRelatorio(c);
   if (navigator.share) { try { await navigator.share({ title: 'Conferência de ferramentas', text: texto }); return; } catch (e) { if (e.name === 'AbortError') return; } }
@@ -591,6 +621,7 @@ VIEWS.conf = (id) => {
   const ord = [...c.linhas].sort((a, b) => (Math.abs(b.contado - b.esperado) > 0) - (Math.abs(a.contado - a.esperado) > 0));
   $('#app').innerHTML = `
     <div class="card"><div>Responsável: <b>${esc(c.responsavel)}</b></div><div class="small muted">Início ${fmt(c.iniciadaEm, true)} · fim ${fmt(c.fechadaEm, true)}</div></div>
+    ${c.linhas.some((l) => l.contado !== l.esperado) && D().config.contatos.length ? blocoEnvios(c) : ''}
     <button class="btn full" data-a="compartilhar" data-c="${c.id}" style="margin-bottom:12px">Enviar relatório</button>
     <div class="list">${ord.map((l) => {
       const d = l.contado - l.esperado;
@@ -713,6 +744,13 @@ VIEWS.ajustes = () => {
       <label class="row" style="gap:12px"><input type="checkbox" id="cfCegas" ${cfg.cegas ? 'checked' : ''} style="width:24px;min-height:24px"> <span class="grow">Contagem às cegas<br><span class="small muted">Esconde a quantidade do turno anterior durante a contagem; a comparação aparece só no fim.</span></span></label>
       <button class="btn primary full" data-a="salvar-cfg">Salvar</button>
     </div>
+    <div class="card stack"><h2>Alertas por WhatsApp</h2>
+      <p class="small muted" style="margin:0">Quem deve ser avisado quando uma conferência fechar com divergência. Um por linha: <b>nome; DDD e número</b>.</p>
+      <textarea id="cfCts" placeholder="Supervisor João; 31 99999-8888&#10;Maria (almoxarifado); 31 98888-7777">${esc(cfg.contatos.map((ct) => ct.nome + '; ' + ct.numero).join('\n'))}</textarea>
+      <label class="row" style="gap:12px"><input type="checkbox" id="cfWAuto" ${cfg.whatsAuto ? 'checked' : ''} style="width:24px;min-height:24px"> <span class="grow">Abrir o WhatsApp sozinho ao fechar com divergência<br><span class="small muted">Abre a conversa do primeiro contato com a mensagem pronta; os demais ficam com botão na tela de resultado.</span></span></label>
+      <p class="small muted" style="margin:0">Para mandar num <b>grupo</b>, use “Enviar relatório” e escolha o grupo (o WhatsApp não permite abrir grupos direto pelo link).</p>
+      <button class="btn primary full" data-a="salvar-alertas">Salvar contatos</button>
+    </div>
     <div class="card stack"><h2>Dados</h2>
       <p class="small muted" style="margin:0">Os dados ficam só neste aparelho. Faça backup com frequência.</p>
       <button class="btn full" data-a="backup">Exportar backup (.json)</button>
@@ -721,7 +759,7 @@ VIEWS.ajustes = () => {
       <button class="btn danger full" data-a="apagar">Apagar todos os dados</button>
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.1 · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.2 · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -803,6 +841,25 @@ const ACOES = {
   bloquear: () => { ajustesLiberado = false; VIEWS.ajustes(); },
   'remover-senha': () => modal({ titulo: 'Remover PIN?', corpo: '<p>Os Ajustes ficarão abertos para qualquer pessoa com o aparelho.</p>', ok: 'Remover', perigo: true,
     aoConfirmar() { D().config.senha = null; DB.salvar(); toast('PIN removido'); VIEWS.ajustes(); } }),
+  whats: (el) => {
+    const c = D().conferencias.find((x) => x.id === el.dataset.c);
+    const ct = D().config.contatos.find((x) => x.numero === el.dataset.n);
+    if (c && ct) abrirWhats(c, ct);
+  },
+  'salvar-alertas': () => {
+    const cts = [], ruins = [];
+    for (const linha of $('#cfCts').value.split('\n')) {
+      if (!linha.trim()) continue;
+      const p = linha.split(/[;\t]/).map((x) => x.trim());
+      const numero = numeroWa(p.length > 1 ? p[p.length - 1] : p[0]);
+      if (!numero) { ruins.push(linha.trim()); continue; }
+      cts.push({ nome: p.length > 1 ? p.slice(0, -1).join(' ') : '+' + numero, numero });
+    }
+    if (ruins.length) return modal({ titulo: 'Número inválido', corpo: `<p>Confira o DDD e o número destas linhas:</p><div class="small">${ruins.map((r) => '• ' + esc(r)).join('<br>')}</div>`, ok: 'Corrigir', cancelar: null });
+    D().config.contatos = cts;
+    D().config.whatsAuto = $('#cfWAuto').checked;
+    DB.salvar(); toast(`${cts.length} contato(s) salvo(s)`); VIEWS.ajustes();
+  },
   'salvar-cfg': () => {
     const linhas = (s) => $(s).value.split('\n').map((x) => x.trim()).filter(Boolean);
     const cfg = D().config;

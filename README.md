@@ -15,6 +15,9 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - **Entrada / Baixa** registra compras, quebras, envios para reparo etc. sem gerar alerta falso.
 - Opção de **contagem às cegas** (esconde o número anterior durante a contagem).
 - Backup JSON, restauração e exportação CSV (abre no Excel).
+- **Alertas por WhatsApp em 1 toque**: contatos em Ajustes; ao fechar com divergência o WhatsApp abre na conversa
+  do 1º contato com a mensagem pronta (os outros têm botão na tela de resultado). Envio sem toque = etapa da nuvem
+  (API oficial do WhatsApp/Meta + servidor).
 - **PIN do supervisor** (opcional) trava a tela de Ajustes. Só o hash com sal fica gravado; 5 erros = espera de 30s.
   Se o PIN for esquecido, não há recuperação pelo app.
 
@@ -30,3 +33,7 @@ Dados em `localStorage` (chave `ferramentaria_v1`), todos os registros com `id` 
 ## Versão 1.1 (02/10/2026)
 - Trava dos Ajustes com PIN do supervisor (criar, trocar, remover, travar agora; trava de novo ao sair da tela)
 - Avisos na tela não se sobrepõem mais
+
+## Versão 1.2 (02/10/2026)
+- Contatos para alerta de divergência (nome; DDD e número) e abertura automática do WhatsApp com a mensagem pronta
+- Botões Enviar/Reenviar por contato, com registro de quando foi aberto, no resultado e no histórico

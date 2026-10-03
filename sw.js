@@ -1,6 +1,6 @@
 // Ferramentaria — service worker: deixa o app abrir sem internet (pátio/oficina sem sinal).
 // Estratégia: rede primeiro (pega a versão nova quando há internet), cache como reserva.
-const CACHE = 'ferramentaria-20261002233657';
+const CACHE = 'ferramentaria-20261002234329';
 const ARQUIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
