@@ -29,7 +29,11 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - Scripts em `supabase/`: `01-tabelas.sql` (tabelas, regras de acesso, visões), `02-permissoes.sql`,
   `03-limpar-dados.sql` (apaga tudo da nuvem — só para limpar testes),
   `04-niveis-acesso.sql` (tabela `perfis`, funções `eh_supervisor` e `definir_papel`, regras por nível),
-  `05-apagar-historico.sql` (só supervisor grava/altera conferência marcada como excluída).
+  `05-apagar-historico.sql` (só supervisor grava/altera conferência marcada como excluída),
+  `06-notificacoes.sql` (tabela `push_inscricoes` + gatilho que chama a função; CONTÉM o segredo do aviso),
+  `functions/notifica-supervisor/index.ts` (Edge Function, "Verify JWT" desligado).
+- `supabase/SEGREDOS-nao-compartilhar.txt`: chaves VAPID e segredo do aviso (vão em Edge Functions → Secrets).
+  Nunca publicar (o publica-ferramentaria só copia index/manifest/sw/ícones).
 - Local primeiro: grava no aparelho (`ferramentaria_v1`) e sincroniza quando há internet (ao abrir, ao voltar o sinal,
   1,5 s após cada alteração e a cada 60 s). Envia só o que mudou (impressão digital por registro); recebe pelo
   `sinc_em` do servidor. Conflito no mesmo registro: vale o último envio. Na 1ª sincronização de um aparelho,
@@ -80,3 +84,10 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - Exclusão sincroniza por "marca" {id, excluida, excluidaEm, por} sem o conteúdo; a marca sempre prevalece;
   tratamentos da conferência vão junto (lista local `excluidos`)
 - Correção: eventos de uma janela não passam mais para a próxima
+
+## Versão 1.8 (03/10/2026)
+- Notificação no celular dos supervisores a cada conferência finalizada (Web Push): Ajustes → Notificações →
+  "Ativar notificações neste aparelho"; botão de teste; não avisa o aparelho que fechou a conferência
+- Fluxo: conferência entra na nuvem → gatilho (pg_net) → Edge Function notifica-supervisor → push para as
+  inscrições de quem é supervisor; inscrições de aparelhos que desinstalaram são removidas sozinhas
+- Ao trocar de login ou sair, a inscrição do login anterior é removida; técnico nunca fica inscrito

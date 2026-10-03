@@ -209,7 +209,8 @@ const itemPorId = (id) => D().itens.find((i) => i.id === id);
 // Nível de acesso: vem do login (tabela perfis na nuvem). Sem nuvem, o aparelho tem acesso total.
 const supervisor = () => !Nuvem.ativa() || Nuvem.sessao.papel === 'supervisor';
 const SO_SUPERVISOR = new Set(['novo-item', 'editar-item', 'mov', 'importar', 'desativar', 'reativar', 'tratar',
-  'salvar-cfg', 'salvar-alertas', 'backup', 'restaurar', 'csv', 'apagar', 'sair', 'apagar-historico', 'apagar-conf']);
+  'salvar-cfg', 'salvar-alertas', 'backup', 'restaurar', 'csv', 'apagar', 'sair', 'apagar-historico', 'apagar-conf',
+  'aviso-ativar', 'aviso-desativar', 'aviso-teste']);
 const tratamentoDe = (confId, itemId) => D().tratamentos.find((t) => t.id === confId + ':' + itemId);
 const ultimaConferencia = () => D().conferencias.reduce((u, c) => (!u || c.fechadaEm > u.fechadaEm ? c : u), null);
 
@@ -793,6 +794,7 @@ VIEWS.ajustes = () => {
     ${Nuvem.ativa() ? cartaoConta() : `<div class="card stack"><h2>Nuvem</h2>
       <p class="small muted" style="margin:0">Sem login, os dados ficam só neste aparelho. Entrando, eles vão para a nuvem e os outros aparelhos da equipe veem o mesmo controle.</p>
       <button class="btn primary full" data-a="ir-login">Entrar na conta da equipe</button></div>`}
+    ${cartaoAvisos()}
     <div class="card stack"><h2>Histórico</h2>
       <p class="small muted" style="margin:0">${D().conferencias.length} conferência(s) registrada(s)${D().conferencias.length ? ' desde ' + fmt(D().conferencias.reduce((m, c) => (c.fechadaEm < m ? c.fechadaEm : m), D().conferencias[0].fechadaEm), true).slice(0, 10) : ''}. Para apagar uma só, abra-a no Histórico.</p>
       <button class="btn danger full" data-a="apagar-historico">Apagar histórico…</button>
@@ -805,7 +807,7 @@ VIEWS.ajustes = () => {
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.7 · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.8 · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -1023,6 +1025,7 @@ const Nuvem = {
     // Mostra o que chegou de outros aparelhos, sem atrapalhar quem está digitando ou contando
     const ae = document.activeElement;
     if (chegou && !$('#dlg').open && !(rota().nome === 'conferir' && D().rascunho) && !(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) render();
+    if (this.estado === 'ok') Avisos.conferir().catch(() => {});
     if (this.deNovo) { this.deNovo = false; this.agendar(300); }
   },
   textoEstado() {
@@ -1041,6 +1044,69 @@ const Nuvem = {
     el.textContent = this.estado === 'enviando' ? '☁ ↻' : this.estado === 'offline' ? `☁ sem sinal${n ? ' · ' + n : ''}` : this.estado === 'erro' ? '☁ ⚠' : n ? `☁ ${n}` : '☁ ✓';
   }
 };
+
+/* ---------- Notificações para supervisores ----------
+   O aparelho do supervisor se inscreve (Web Push) e a inscrição fica na tabela push_inscricoes.
+   A cada conferência nova na nuvem, a função "notifica-supervisor" envia o aviso (ver supabase/06). */
+const VAPID_PUBLICA = 'BI2jrIgrNRDLwyq4OCQDkvqO6JsyFqFPltagozUgvC3D8MctiJ8au8ZtQJnTOpyjjxqOOqE5vVznb64Aw6GNPpk';
+const FUNCAO_AVISO = SUPA_URL + '/functions/v1/notifica-supervisor';
+const Avisos = {
+  ok: false,
+  suportado() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; },
+  marcado() { try { return !!localStorage.getItem('ferramentaria_aviso'); } catch (e) { return false; } },
+  marcar(v) { try { v ? localStorage.setItem('ferramentaria_aviso', '1') : localStorage.removeItem('ferramentaria_aviso'); } catch (e) {} },
+  chave() {
+    const b = atob(VAPID_PUBLICA.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - VAPID_PUBLICA.length % 4) % 4));
+    return Uint8Array.from(b, (c) => c.charCodeAt(0));
+  },
+  async inscricao() { const reg = await navigator.serviceWorker.ready; return reg.pushManager.getSubscription(); },
+  async registrar(sub) {
+    await Nuvem.api('push_inscricoes?on_conflict=endpoint', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ endpoint: sub.endpoint, dispositivo: D().dispositivo, inscricao: sub.toJSON() }) });
+    this.marcar(true); this.ok = true;
+  },
+  async ativar() {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error(perm === 'denied' ? 'bloqueadas' : 'sem permissão');
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: this.chave() }));
+    await this.registrar(sub);
+  },
+  async desativar() {
+    this.marcar(false); this.ok = false;
+    if (!this.suportado()) return;
+    const sub = await this.inscricao().catch(() => null);
+    if (!sub) return;
+    try { await Nuvem.api('push_inscricoes?endpoint=eq.' + encodeURIComponent(sub.endpoint), { method: 'DELETE' }); } catch (e) {}
+    await sub.unsubscribe().catch(() => {});
+  },
+  // Depois de cada sincronização: técnico não recebe; supervisor mantém a inscrição registrada na nuvem.
+  async conferir() {
+    if (!this.suportado() || !Nuvem.ativa() || !this.marcado()) return;
+    if (!supervisor()) return this.desativar();
+    if (this.ok) return;
+    const sub = await this.inscricao().catch(() => null);
+    if (sub && Notification.permission === 'granted') await this.registrar(sub).catch(() => {});
+    else this.marcar(false);
+  },
+  async teste() {
+    const r = await fetch(FUNCAO_AVISO, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teste: true, token: await Nuvem.token() }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.erro || 'erro ' + r.status);
+    return d.enviados || 0;
+  }
+};
+function cartaoAvisos() {
+  if (!Nuvem.ativa()) return '';
+  let corpo;
+  if (!Avisos.suportado()) corpo = '<p class="small muted" style="margin:0">Este navegador não suporta notificações. No Android, use o Chrome com o app instalado na tela inicial.</p>';
+  else if (Notification.permission === 'denied') corpo = '<p class="small" style="margin:0;color:var(--warn)">As notificações estão <b>bloqueadas</b> para o app. Libere em Configurações do Android → Apps → Chrome (ou Ferramentaria) → Notificações, e volte aqui.</p>';
+  else if (Avisos.marcado()) corpo = `<p class="small" style="margin:0">✓ <b>Ativadas neste aparelho.</b> Você recebe um aviso a cada conferência finalizada (exceto as fechadas neste próprio aparelho).</p>
+      <div class="row"><button class="btn grow" data-a="aviso-teste">Enviar teste</button><button class="btn grow" data-a="aviso-desativar">Desativar</button></div>`;
+  else corpo = `<p class="small muted" style="margin:0">Receba uma notificação no celular sempre que uma conferência for finalizada, com as divergências, mesmo com o app fechado.</p>
+      <button class="btn primary full" data-a="aviso-ativar">Ativar notificações neste aparelho</button>`;
+  return `<div class="card stack"><h2>Notificações</h2>${corpo}</div>`;
+}
 
 function telaLogin() {
   const exp = Nuvem.sessao && Nuvem.sessao.expirada;
@@ -1097,10 +1163,17 @@ function trocarLogin() {
       const email = dlg.querySelector('#tlEmail').value.trim(), senha = dlg.querySelector('#tlSenha').value;
       toast('Entrando…');
       await Nuvem.sincronizar();  // envia o que o login atual alterou antes de trocar
+      const avisosAtivos = Avisos.marcado();
+      if (avisosAtivos) await Avisos.desativar();  // a inscrição pertence ao login atual
       const anterior = Nuvem.sessao;
       try { await Nuvem.auth({ email, password: senha }, 'password'); }
-      catch (e) { Nuvem.sessao = anterior; Nuvem.guardar(); return toast(e.status === 400 ? 'E-mail ou senha incorretos' : 'Não foi possível entrar: ' + e.message); }
+      catch (e) {
+        Nuvem.sessao = anterior; Nuvem.guardar();
+        if (avisosAtivos) Avisos.ativar().catch(() => {});
+        return toast(e.status === 400 ? 'E-mail ou senha incorretos' : 'Não foi possível entrar: ' + e.message);
+      }
       await Nuvem.sincronizar();  // carrega o nível do novo login
+      if (avisosAtivos && supervisor()) await Avisos.ativar().catch(() => {});
       toast(`Conectado como ${Nuvem.sessao.email} (${supervisor() ? 'Supervisor' : 'Técnico'})`);
       render();
     }
@@ -1192,10 +1265,22 @@ const ACOES = {
   'sinc-agora': async () => { await Nuvem.sincronizar(); toast(Nuvem.estado === 'ok' ? 'Sincronizado' : Nuvem.textoEstado()); VIEWS.ajustes(); },
   'sinc-info': () => toast(Nuvem.textoEstado()),
   'trocar-login': trocarLogin,
+  'aviso-ativar': async () => {
+    if (!navigator.onLine) return toast('É preciso internet para ativar');
+    try { await Avisos.ativar(); toast('Notificações ativadas neste aparelho'); }
+    catch (e) { toast(e.message === 'bloqueadas' ? 'Notificações bloqueadas: libere nas configurações do Android' : e.message === 'sem permissão' ? 'Permissão não concedida' : 'Não foi possível ativar: ' + e.message); }
+    VIEWS.ajustes();
+  },
+  'aviso-desativar': async () => { await Avisos.desativar(); toast('Notificações desativadas neste aparelho'); VIEWS.ajustes(); },
+  'aviso-teste': async () => {
+    try { const n = await Avisos.teste(); toast(n ? 'Teste enviado: a notificação deve chegar em instantes' : 'Nenhum aparelho inscrito recebeu. Desative e ative de novo.'); }
+    catch (e) { toast('Falha no teste: ' + e.message); }
+  },
   'apagar-historico': formApagarHistorico,
   'apagar-conf': (el) => formApagarConferencia(D().conferencias.find((c) => c.id === el.dataset.c)),
   sair: async () => {
     if (navigator.onLine) await Nuvem.sincronizar();
+    if (Avisos.marcado()) await Avisos.desativar();
     const n = Nuvem.contarPendentes();
     modal({ titulo: 'Sair da conta neste aparelho?', perigo: true, ok: 'Sair',
       corpo: `<p>Os dados continuam salvos na nuvem; a cópia deste aparelho será apagada.</p>${n ? `<p style="color:var(--bad)"><b>Atenção:</b> ${n} alteração(ões) ainda não foram enviadas (sem internet?) e serão perdidas.</p>` : ''}${D().rascunho ? '<p>A conferência em andamento será descartada.</p>' : ''}`,
