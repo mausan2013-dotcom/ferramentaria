@@ -692,6 +692,7 @@ function cartaoConta() {
       <p class="small" style="margin:0">Conectado como <b>${esc(Nuvem.sessao.email)}</b> · nível <span class="tag ${supervisor() ? 'ok' : ''}">${supervisor() ? 'Supervisor' : 'Técnico'}</span><br>
       <span class="muted">Última sincronização: ${Nuvem.sinc.ultima ? fmt(Nuvem.sinc.ultima, true) : 'ainda não'} · ${Nuvem.contarPendentes()} alteração(ões) aguardando envio</span></p>
       <button class="btn full" data-a="sinc-agora">Sincronizar agora</button>
+      <button class="btn full" data-a="trocar-login">Trocar de login</button>
       ${supervisor() ? '<button class="btn danger full" data-a="sair">Sair da conta neste aparelho</button>' : ''}
     </div>`;
 }
@@ -730,7 +731,7 @@ VIEWS.ajustes = () => {
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.5 · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.6 · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -987,6 +988,36 @@ async function entrar() {
   }
 }
 
+// Troca o login no mesmo aparelho (ex.: técnico → supervisor). Os dados da equipe são os mesmos
+// para todos os logins, então nada é apagado: só muda o nível de acesso.
+function trocarLogin() {
+  if (!navigator.onLine) return toast('É preciso internet para trocar de login');
+  modal({
+    titulo: 'Trocar de login',
+    corpo: `<div class="stack">
+      <p class="small muted" style="margin:0">Agora: <b>${esc(Nuvem.sessao.email)}</b> (${supervisor() ? 'Supervisor' : 'Técnico'}). Os dados do aparelho continuam; muda só o que este login pode fazer.</p>
+      <div><label class="f" for="tlEmail">E-mail</label><input id="tlEmail" type="email" inputmode="email" autocomplete="username"></div>
+      <div><label class="f" for="tlSenha">Senha</label><input id="tlSenha" type="password" autocomplete="current-password"></div></div>`,
+    ok: 'Entrar',
+    validar(dlg) {
+      if (!dlg.querySelector('#tlEmail').value.trim() || !dlg.querySelector('#tlSenha').value) { toast('Informe e-mail e senha'); return false; }
+      return true;
+    },
+    async aoConfirmar(dlg) {
+      const email = dlg.querySelector('#tlEmail').value.trim(), senha = dlg.querySelector('#tlSenha').value;
+      toast('Entrando…');
+      await Nuvem.sincronizar();  // envia o que o login atual alterou antes de trocar
+      const anterior = Nuvem.sessao;
+      try { await Nuvem.auth({ email, password: senha }, 'password'); }
+      catch (e) { Nuvem.sessao = anterior; Nuvem.guardar(); return toast(e.status === 400 ? 'E-mail ou senha incorretos' : 'Não foi possível entrar: ' + e.message); }
+      await Nuvem.sincronizar();  // carrega o nível do novo login
+      toast(`Conectado como ${Nuvem.sessao.email} (${supervisor() ? 'Supervisor' : 'Técnico'})`);
+      render();
+    }
+  });
+  setTimeout(() => { const i = $('#tlEmail'); if (i) i.focus(); }, 50);
+}
+
 /* ---------- Modal genérico ---------- */
 function modal({ titulo, corpo, ok = 'OK', cancelar = 'Cancelar', perigo, validar, aoConfirmar, aoAbrir }) {
   const dlg = $('#dlg');
@@ -1066,6 +1097,7 @@ const ACOES = {
   'ir-login': () => { try { localStorage.removeItem('ferramentaria_modo'); } catch (e) {} render(); },
   'sinc-agora': async () => { await Nuvem.sincronizar(); toast(Nuvem.estado === 'ok' ? 'Sincronizado' : Nuvem.textoEstado()); VIEWS.ajustes(); },
   'sinc-info': () => toast(Nuvem.textoEstado()),
+  'trocar-login': trocarLogin,
   sair: async () => {
     if (navigator.onLine) await Nuvem.sincronizar();
     const n = Nuvem.contarPendentes();

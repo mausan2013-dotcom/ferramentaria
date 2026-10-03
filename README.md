@@ -67,3 +67,7 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - Níveis de acesso por login (técnico x supervisor), validados também na nuvem; PIN removido
 - Técnico vê a aba "Conta" no lugar de "Ajustes"; botões de cadastro, entrada/baixa e "Tratar" só para supervisor
 - O técnico envia à nuvem só conferências; o resto que mudar no aparelho dele é substituído pela versão da nuvem
+
+## Versão 1.6 (03/10/2026)
+- Botão "Trocar de login" (Conta/Ajustes), para os dois níveis: entra com outro login no mesmo aparelho sem apagar
+  nada (os dados da equipe são os mesmos para todos os logins); sincroniza antes de trocar; senha errada mantém o login atual
