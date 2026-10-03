@@ -91,3 +91,7 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - Fluxo: conferência entra na nuvem → gatilho (pg_net) → Edge Function notifica-supervisor → push para as
   inscrições de quem é supervisor; inscrições de aparelhos que desinstalaram são removidas sozinhas
 - Ao trocar de login ou sair, a inscrição do login anterior é removida; técnico nunca fica inscrito
+
+## Versão 1.9 (03/10/2026)
+- Logo da Rumo (SVG oficial do rumolog.com, uso autorizado pela empresa segundo o usuário) no topo de todas as telas
+  e em destaque no login, com a indicação "ferramenta interna"; cor acompanha o tema (marinho/branco)
