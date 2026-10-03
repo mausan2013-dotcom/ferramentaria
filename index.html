@@ -150,6 +150,7 @@ const DB = {
       movs: [],          // {id, itemId, qtd (+/-), tipo, motivo, por, em}
       conferencias: [],  // {id, turno, responsavel, iniciadaEm, fechadaEm, linhas[], envios{}}
       tratamentos: [],   // {id: confId + ':' + itemId, confId, itemId, nota, por, em}
+      excluidos: { conferencias: [], tratamentos: [] },  // marcas de exclusão {id, excluida, excluidaEm, por}: levam o apagar aos outros aparelhos
       rascunho: null     // conferência em andamento: fica só neste aparelho
     };
   },
@@ -160,6 +161,8 @@ const DB = {
     this.dados.config = Object.assign(v.config, this.dados.config || {});
     delete this.dados.config.senha;  // PIN das versões 1.1–1.4: substituído pelos níveis de acesso
     for (const k of ['itens', 'movs', 'conferencias', 'tratamentos']) if (!Array.isArray(this.dados[k])) this.dados[k] = [];
+    this.dados.excluidos = this.dados.excluidos || {};
+    for (const k of ['conferencias', 'tratamentos']) if (!Array.isArray(this.dados.excluidos[k])) this.dados.excluidos[k] = [];
     // v1.2 guardava os tratamentos dentro da conferência; agora são registros próprios (sincronizam sem conflito)
     for (const c of this.dados.conferencias) if (c.tratamentos) {
       for (const [itemId, t] of Object.entries(c.tratamentos)) {
@@ -206,7 +209,7 @@ const itemPorId = (id) => D().itens.find((i) => i.id === id);
 // Nível de acesso: vem do login (tabela perfis na nuvem). Sem nuvem, o aparelho tem acesso total.
 const supervisor = () => !Nuvem.ativa() || Nuvem.sessao.papel === 'supervisor';
 const SO_SUPERVISOR = new Set(['novo-item', 'editar-item', 'mov', 'importar', 'desativar', 'reativar', 'tratar',
-  'salvar-cfg', 'salvar-alertas', 'backup', 'restaurar', 'csv', 'apagar', 'sair']);
+  'salvar-cfg', 'salvar-alertas', 'backup', 'restaurar', 'csv', 'apagar', 'sair', 'apagar-historico', 'apagar-conf']);
 const tratamentoDe = (confId, itemId) => D().tratamentos.find((t) => t.id === confId + ':' + itemId);
 const ultimaConferencia = () => D().conferencias.reduce((u, c) => (!u || c.fechadaEm > u.fechadaEm ? c : u), null);
 
@@ -638,6 +641,72 @@ function formImportar() {
   });
 }
 
+/* --- Apagar histórico (supervisor) ---
+   A conferência sai da lista e vira uma marca {id, excluida} sem conteúdo, que sincroniza e
+   faz os outros aparelhos apagarem também. Os tratamentos dela vão junto. */
+function apagarConferencias(ids) {
+  const set = new Set(ids);
+  const marca = (id) => ({ id, excluida: true, excluidaEm: agora(), por: (Nuvem.sessao && Nuvem.sessao.email) || '' });
+  for (const id of set) D().excluidos.conferencias.push(marca(id));
+  D().conferencias = D().conferencias.filter((c) => !set.has(c.id));
+  const trats = D().tratamentos.filter((t) => set.has(t.confId));
+  for (const t of trats) D().excluidos.tratamentos.push(marca(t.id));
+  D().tratamentos = D().tratamentos.filter((t) => !set.has(t.confId));
+  DB.salvar();
+}
+function alertasDe(ids) {
+  const set = new Set(ids);
+  return divergenciasPendentes().filter(({ c }) => set.has(c.id)).length;
+}
+function formApagarHistorico() {
+  const ult = ultimaConferencia();
+  const outras = D().conferencias.filter((c) => c !== ult);
+  if (!outras.length) return toast('Não há conferências para apagar (a última é mantida como referência)');
+  const dias = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const opcoes = [
+    ['30', 'Mais antigas que 30 dias', outras.filter((c) => c.fechadaEm < dias(30))],
+    ['90', 'Mais antigas que 90 dias', outras.filter((c) => c.fechadaEm < dias(90))],
+    ['tudo', 'Todas, menos a última', outras]
+  ];
+  let escolha = null;
+  modal({
+    titulo: 'Apagar histórico',
+    corpo: `<div class="stack">
+      <p class="small muted" style="margin:0">A última conferência (${esc(ult.turno)} · ${fmt(ult.fechadaEm)}) é sempre mantida: é a referência do próximo turno.</p>
+      <div class="chips" id="ahOp">${opcoes.map(([k, n, l]) => `<button type="button" data-v="${k}" ${l.length ? '' : 'disabled style="opacity:.45"'}>${n} (${l.length})</button>`).join('')}</div>
+      <div id="ahInfo" class="small"></div>
+      <div><label class="f" for="ahConf">Para confirmar, digite APAGAR</label><input id="ahConf" autocomplete="off" autocapitalize="characters"></div>
+      <p class="small" style="margin:0;color:var(--bad)"><b>Não dá para desfazer</b>, em nenhum aparelho. Se quiser guardar, use antes “Exportar conferências (.csv)”.</p></div>`,
+    ok: 'Apagar', perigo: true,
+    aoAbrir(dlg) {
+      dlg.querySelector('#ahOp').addEventListener('click', (e) => {
+        const b = e.target.closest('button'); if (!b || b.disabled) return;
+        escolha = opcoes.find((o) => o[0] === b.dataset.v);
+        [...b.parentElement.children].forEach((x) => x.classList.toggle('on', x === b));
+        const n = escolha[2].length, a = alertasDe(escolha[2].map((c) => c.id));
+        dlg.querySelector('#ahInfo').innerHTML = `Serão apagadas <b>${n}</b> conferência(s)${a ? ` e <b>${a}</b> alerta(s) pendente(s) delas` : ''}.`;
+      });
+    },
+    validar(dlg) {
+      if (!escolha) { toast('Escolha o que apagar'); return false; }
+      if (dlg.querySelector('#ahConf').value.trim().toUpperCase() !== 'APAGAR') { toast('Digite APAGAR para confirmar'); return false; }
+      return true;
+    },
+    aoConfirmar() { apagarConferencias(escolha[2].map((c) => c.id)); toast(`${escolha[2].length} conferência(s) apagada(s)`); render(); }
+  });
+}
+function formApagarConferencia(c) {
+  const ehUltima = c === ultimaConferencia();
+  const a = alertasDe([c.id]);
+  modal({
+    titulo: 'Apagar esta conferência?',
+    corpo: `<p><b>${esc(c.turno)} · ${fmt(c.fechadaEm, true)}</b> (${esc(c.responsavel)}) será apagada em todos os aparelhos${a ? `, junto com ${a} alerta(s) pendente(s)` : ''}. Não dá para desfazer.</p>
+      ${ehUltima ? '<p style="color:var(--warn)"><b>É a conferência mais recente.</b> O próximo turno passará a ser comparado com a conferência anterior a ela (mais as entradas/baixas registradas depois).</p>' : ''}`,
+    ok: 'Apagar', perigo: true,
+    aoConfirmar() { apagarConferencias([c.id]); toast('Conferência apagada'); ir('historico'); }
+  });
+}
+
 /* --- Histórico --- */
 VIEWS.historico = () => {
   topo('Histórico');
@@ -666,7 +735,8 @@ VIEWS.conf = (id) => {
         <div class="s">${l.codigo ? esc(l.codigo) + ' · ' : ''}anterior ${l.esperado} → contado ${l.contado}${l.justificativa ? ' · “' + esc(l.justificativa) + '”' : ''}</div>
         ${t ? `<div class="s" style="color:var(--ok)">Tratado: ${esc(t.nota)} — ${esc(t.por)} ${fmt(t.em)}</div>` : ''}</div>
         ${d ? (t ? `<span class="tag warn">${difTexto(d)}</span>` : supervisor() ? `<button class="btn" data-a="tratar" data-c="${c.id}" data-i="${l.itemId}">Tratar</button>` : `<span class="tag bad">${difTexto(d)}</span>`) : '<span class="tag ok">ok</span>'}</div>`;
-    }).join('')}</div>`;
+    }).join('')}</div>
+    ${supervisor() ? `<button class="btn danger full" data-a="apagar-conf" data-c="${c.id}">Apagar esta conferência</button>` : ''}`;
 };
 
 function formTratar(c, itemId) {
@@ -723,6 +793,10 @@ VIEWS.ajustes = () => {
     ${Nuvem.ativa() ? cartaoConta() : `<div class="card stack"><h2>Nuvem</h2>
       <p class="small muted" style="margin:0">Sem login, os dados ficam só neste aparelho. Entrando, eles vão para a nuvem e os outros aparelhos da equipe veem o mesmo controle.</p>
       <button class="btn primary full" data-a="ir-login">Entrar na conta da equipe</button></div>`}
+    <div class="card stack"><h2>Histórico</h2>
+      <p class="small muted" style="margin:0">${D().conferencias.length} conferência(s) registrada(s)${D().conferencias.length ? ' desde ' + fmt(D().conferencias.reduce((m, c) => (c.fechadaEm < m ? c.fechadaEm : m), D().conferencias[0].fechadaEm), true).slice(0, 10) : ''}. Para apagar uma só, abra-a no Histórico.</p>
+      <button class="btn danger full" data-a="apagar-historico">Apagar histórico…</button>
+    </div>
     <div class="card stack"><h2>Dados</h2>
       <p class="small muted" style="margin:0">${Nuvem.ativa() ? 'Os dados são salvos na nuvem automaticamente. O backup é uma cópia extra.' : 'Os dados ficam só neste aparelho. Faça backup com frequência.'}</p>
       <button class="btn full" data-a="backup">Exportar backup (.json)</button>
@@ -731,7 +805,7 @@ VIEWS.ajustes = () => {
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.6 · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.7 · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -849,10 +923,25 @@ const Nuvem = {
   podeEnviar(col) { return col === 'conferencias' || this.sessao.papel === 'supervisor'; },
 
   /* -- registros locais por coleção -- */
-  registros(col) { return col === 'config' ? [['config', D().config]] : D()[col].map((x) => [x.id, x]); },
-  obter(col, id) { return col === 'config' ? D().config : D()[col].find((x) => x.id === id); },
+  registros(col) {
+    if (col === 'config') return [['config', D().config]];
+    return [...D()[col], ...(D().excluidos[col] || [])].map((x) => [x.id, x]);
+  },
+  obter(col, id) {
+    if (col === 'config') return D().config;
+    return D()[col].find((x) => x.id === id) || (D().excluidos[col] || []).find((x) => x.id === id);
+  },
   aplicar(col, id, dados) {
     if (col === 'config') { DB.dados.config = Object.assign(DB.vazio().config, dados); return; }
+    const exc = D().excluidos[col];
+    if (exc) {  // conferências e tratamentos podem ter sido apagados pelo supervisor
+      const [destino, outra] = dados.excluida ? [exc, D()[col]] : [D()[col], exc];
+      const k = outra.findIndex((x) => x.id === id);
+      if (k >= 0) outra.splice(k, 1);
+      const atual = destino.find((x) => x.id === id);
+      if (atual) { for (const c of Object.keys(atual)) delete atual[c]; Object.assign(atual, dados); } else destino.push(dados);
+      return;
+    }
     const atual = D()[col].find((x) => x.id === id);
     if (atual) { for (const k of Object.keys(atual)) delete atual[k]; Object.assign(atual, dados); }  // mantém a mesma referência
     else D()[col].push(dados);
@@ -873,7 +962,8 @@ const Nuvem = {
       // Alterado aqui e ainda não enviado: o envio vai atualizar a nuvem.
       // Exceção: na 1ª sincronização os ajustes da nuvem prevalecem sobre os padrões de um aparelho novo.
       // (Coleções que este nível não pode enviar: vale sempre a nuvem.)
-      if (env[linha.id] !== dLocal && !(col === 'config' && primeira) && this.podeEnviar(col)) return false;
+      // (Exclusão feita pelo supervisor sempre prevalece.)
+      if (env[linha.id] !== dLocal && !(col === 'config' && primeira) && this.podeEnviar(col) && !linha.dados.excluida) return false;
     }
     this.aplicar(col, linha.id, linha.dados);
     env[linha.id] = dRemoto;
@@ -1020,7 +1110,11 @@ function trocarLogin() {
 
 /* ---------- Modal genérico ---------- */
 function modal({ titulo, corpo, ok = 'OK', cancelar = 'Cancelar', perigo, validar, aoConfirmar, aoAbrir }) {
-  const dlg = $('#dlg');
+  // Cada janela começa num elemento novo: assim os eventos de uma (aoAbrir) não sobram para a próxima.
+  const velho = $('#dlg');
+  if (velho.open) velho.close();
+  const dlg = velho.cloneNode(false);
+  velho.replaceWith(dlg);
   dlg.innerHTML = `<div class="dh">${esc(titulo)}</div><div class="db">${corpo}</div>
     <div class="df">${cancelar ? `<button class="btn" data-m="x">${esc(cancelar)}</button>` : ''}<button class="btn ${perigo ? 'danger' : 'primary'}" data-m="ok">${esc(ok)}</button></div>`;
   dlg.onclick = (e) => {
@@ -1098,6 +1192,8 @@ const ACOES = {
   'sinc-agora': async () => { await Nuvem.sincronizar(); toast(Nuvem.estado === 'ok' ? 'Sincronizado' : Nuvem.textoEstado()); VIEWS.ajustes(); },
   'sinc-info': () => toast(Nuvem.textoEstado()),
   'trocar-login': trocarLogin,
+  'apagar-historico': formApagarHistorico,
+  'apagar-conf': (el) => formApagarConferencia(D().conferencias.find((c) => c.id === el.dataset.c)),
   sair: async () => {
     if (navigator.onLine) await Nuvem.sincronizar();
     const n = Nuvem.contarPendentes();

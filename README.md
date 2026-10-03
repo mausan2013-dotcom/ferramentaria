@@ -28,7 +28,8 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
   logins criados em Authentication → Users (um login por aparelho, pode ser o mesmo nos vários aparelhos).
 - Scripts em `supabase/`: `01-tabelas.sql` (tabelas, regras de acesso, visões), `02-permissoes.sql`,
   `03-limpar-dados.sql` (apaga tudo da nuvem — só para limpar testes),
-  `04-niveis-acesso.sql` (tabela `perfis`, funções `eh_supervisor` e `definir_papel`, regras por nível).
+  `04-niveis-acesso.sql` (tabela `perfis`, funções `eh_supervisor` e `definir_papel`, regras por nível),
+  `05-apagar-historico.sql` (só supervisor grava/altera conferência marcada como excluída).
 - Local primeiro: grava no aparelho (`ferramentaria_v1`) e sincroniza quando há internet (ao abrir, ao voltar o sinal,
   1,5 s após cada alteração e a cada 60 s). Envia só o que mudou (impressão digital por registro); recebe pelo
   `sinc_em` do servidor. Conflito no mesmo registro: vale o último envio. Na 1ª sincronização de um aparelho,
@@ -71,3 +72,11 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 ## Versão 1.6 (03/10/2026)
 - Botão "Trocar de login" (Conta/Ajustes), para os dois níveis: entra com outro login no mesmo aparelho sem apagar
   nada (os dados da equipe são os mesmos para todos os logins); sincroniza antes de trocar; senha errada mantém o login atual
+
+## Versão 1.7 (03/10/2026)
+- Supervisor apaga histórico: em Ajustes → Histórico (mais antigas que 30/90 dias ou todas menos a última, com
+  confirmação digitando APAGAR) e em cada conferência ("Apagar esta conferência", avisa se for a mais recente)
+- A última conferência é mantida no apagar em massa (é a referência do próximo turno)
+- Exclusão sincroniza por "marca" {id, excluida, excluidaEm, por} sem o conteúdo; a marca sempre prevalece;
+  tratamentos da conferência vão junto (lista local `excluidos`)
+- Correção: eventos de uma janela não passam mais para a próxima
