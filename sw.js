@@ -1,6 +1,6 @@
 // Ferramentaria — service worker: deixa o app abrir sem internet (pátio/oficina sem sinal).
 // Estratégia: rede primeiro (pega a versão nova quando há internet), cache como reserva.
-const CACHE = 'ferramentaria-20261003001911';
+const CACHE = 'ferramentaria-20261003003121';
 const ARQUIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -16,7 +16,18 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  // Fonte (Open Sans): guarda na 1ª vez e usa do cache depois, para abrir igual sem internet
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request).then((resp) => {
+      const copia = resp.clone();
+      caches.open(CACHE).then((c) => c.put(e.request, copia));
+      return resp;
+    })));
+    return;
+  }
+  if (url.origin !== location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then((resp) => {

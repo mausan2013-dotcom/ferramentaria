@@ -53,3 +53,9 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - Ajustes → Nuvem: conta, última sincronização, sincronizar agora, sair da conta (limpa o aparelho)
 - Opção "Usar sem nuvem"; ao entrar depois, os dados do aparelho sobem para a nuvem
 - Tratamentos de divergência viraram registros próprios (migração automática da v1.2)
+
+## Versão 1.4 (03/10/2026)
+- Visual no padrão da empresa (referência: rumolog.com): azul-marinho #043865, azul-claro #32a6e6,
+  fundo #ebf0f2, fonte Open Sans (guardada para uso offline), cantos retos, bloco de status com canto cortado,
+  abas em maiúsculas com marcador azul; tema escuro em azul-marinho; ícone novo
+- Logo da empresa NÃO incluído: o site é público e o app ainda é teste sem aval formal (aguarda autorização)
