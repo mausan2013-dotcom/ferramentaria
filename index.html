@@ -126,7 +126,7 @@ const DB = {
     return {
       versao: 1,
       dispositivo: uid(),
-      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false },
+      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false, senha: null },  // senha = {sal, hash} do PIN do supervisor
       itens: [],         // {id, codigo, nome, categoria, local, obs, ativo, criadoEm, atualizadoEm}
       movs: [],          // {id, itemId, qtd (+/-), tipo, motivo, por, em}
       conferencias: [],  // {id, turno, responsavel, iniciadaEm, fechadaEm, linhas[], obs, tratamentos{}}
@@ -160,6 +160,7 @@ function fmt(ts, comAno) {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}${comAno ? '/' + d.getFullYear() : ''} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function toast(msg) {
+  document.querySelectorAll('.toast').forEach((x) => x.remove());  // um aviso por vez
   const t = document.createElement('div');
   t.className = 'toast'; t.textContent = msg;
   document.body.appendChild(t);
@@ -230,6 +231,7 @@ function render() {
   const r = rota();
   const aba = { conf: 'historico', item: 'ferramentas', resultado: 'conferir' }[r.nome] || r.nome;
   $('#tabs').innerHTML = ABAS.map(([k, n]) => `<a href="#${k}" class="${k === aba ? 'on' : ''}">${ICONES[k]}${n}</a>`).join('');
+  if (r.nome !== 'ajustes') ajustesLiberado = false;  // saiu dos Ajustes: trava de novo
   const v = VIEWS[r.nome] || VIEWS.inicio;
   v(r.arg);
   window.scrollTo(0, 0);
@@ -618,11 +620,92 @@ function formTratar(c, itemId) {
   });
 }
 
+/* --- Trava dos Ajustes (PIN do supervisor) ---
+   O PIN não fica gravado: só um hash com sal. É uma trava contra alterações por engano
+   ou sem autorização, não uma proteção contra quem tem acesso técnico ao aparelho. */
+let ajustesLiberado = false;
+let pinErros = 0, pinBloqueadoAte = 0;
+
+async function hashPin(pin, sal) {
+  const txt = sal + ':' + pin;
+  if (window.crypto && crypto.subtle) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  // Reserva para quando o app é aberto fora de HTTPS (crypto.subtle indisponível)
+  let h = 2166136261;
+  for (let k = 0; k < 5000; k++) for (let i = 0; i < txt.length; i++) { h ^= txt.charCodeAt(i) + k; h = Math.imul(h, 16777619) >>> 0; }
+  return 'f' + h.toString(16);
+}
+const pinValido = (p) => /^\d{4,8}$/.test(p);
+
+function telaTravada() {
+  topo('Ajustes');
+  $('#app').innerHTML = `
+    <div class="card stack" style="text-align:center;margin-top:24px">
+      <div style="font-size:42px">🔒</div>
+      <div class="big" style="font-size:20px;font-weight:800">Ajustes protegidos</div>
+      <p class="muted" style="margin:0">Digite o PIN do supervisor para alterar equipe, turnos, backup e dados.</p>
+      <input id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="PIN" style="text-align:center;font-size:26px;letter-spacing:8px">
+      <button class="btn big primary" data-a="desbloquear">Desbloquear</button>
+    </div>`;
+  const i = $('#pinIn');
+  i.focus();
+  i.addEventListener('keydown', (e) => { if (e.key === 'Enter') ACOES.desbloquear(); });
+}
+
+async function desbloquear() {
+  const espera = Math.ceil((pinBloqueadoAte - Date.now()) / 1000);
+  if (espera > 0) return toast(`Muitas tentativas. Aguarde ${espera}s`);
+  const inp = $('#pinIn');
+  const s = D().config.senha;
+  if (await hashPin(inp.value, s.sal) === s.hash) {
+    pinErros = 0; ajustesLiberado = true; VIEWS.ajustes(); return;
+  }
+  pinErros++;
+  inp.value = ''; vibrar(200);
+  if (pinErros >= 5) { pinBloqueadoAte = Date.now() + 30000; pinErros = 0; toast('PIN incorreto. Tente de novo em 30s'); }
+  else toast('PIN incorreto');
+}
+
+function formSenha() {
+  const tem = !!D().config.senha;
+  modal({
+    titulo: tem ? 'Trocar PIN do supervisor' : 'Criar PIN do supervisor',
+    corpo: `<div class="stack">
+      <p class="small muted" style="margin:0">Com o PIN, só quem o conhece entra nos Ajustes (equipe, turnos, backup, restaurar e apagar dados). Use de 4 a 8 números.</p>
+      <div><label class="f">Novo PIN</label><input id="pin1" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="new-password"></div>
+      <div><label class="f">Repita o PIN</label><input id="pin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="new-password"></div>
+      <p class="small" style="margin:0;color:var(--warn)"><b>Anote o PIN em lugar seguro.</b> Se for esquecido, não há como recuperar pelo app.</p></div>`,
+    ok: 'Salvar PIN',
+    validar(dlg) {
+      const a = dlg.querySelector('#pin1').value, b = dlg.querySelector('#pin2').value;
+      if (!pinValido(a)) { toast('O PIN deve ter de 4 a 8 números'); return false; }
+      if (a !== b) { toast('Os PINs não conferem'); return false; }
+      return true;
+    },
+    async aoConfirmar(dlg) {
+      const sal = uid();
+      D().config.senha = { sal, hash: await hashPin(dlg.querySelector('#pin1').value, sal) };
+      DB.salvar(); toast('PIN salvo. Os Ajustes agora estão protegidos'); VIEWS.ajustes();
+    }
+  });
+}
+
 /* --- Ajustes --- */
 VIEWS.ajustes = () => {
-  topo('Ajustes');
   const cfg = D().config;
+  if (cfg.senha && !ajustesLiberado) return telaTravada();
+  topo('Ajustes');
   $('#app').innerHTML = `
+    <div class="card stack"><h2>Proteção</h2>
+      ${cfg.senha
+        ? `<p class="small muted" style="margin:0">🔒 Ajustes protegidos por PIN. Voltam a travar ao sair desta tela.</p>
+           <div class="row"><button class="btn grow" data-a="senha">Trocar PIN</button><button class="btn grow" data-a="bloquear">Travar agora</button></div>
+           <button class="btn danger full" data-a="remover-senha">Remover PIN</button>`
+        : `<p class="small muted" style="margin:0">Qualquer pessoa com o aparelho pode alterar os ajustes e apagar dados. Crie um PIN do supervisor para travar esta tela.</p>
+           <button class="btn primary full" data-a="senha">Criar PIN</button>`}
+    </div>
     <div class="card stack"><h2>Equipe</h2>
       <div><label class="f">Nome da oficina / equipe</label><input id="cfOf" value="${esc(cfg.oficina)}" placeholder="Ex.: Manutenção de vagões – Pátio X"></div>
       <div><label class="f">Turnos (um por linha)</label><textarea id="cfTur">${esc(cfg.turnos.join('\n'))}</textarea></div>
@@ -638,7 +721,7 @@ VIEWS.ajustes = () => {
       <button class="btn danger full" data-a="apagar">Apagar todos os dados</button>
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.0 · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.1 · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -715,6 +798,11 @@ const ACOES = {
   igual: (el) => { const id = el.closest('.cnt').dataset.item; setContagem(id, esperado(id)); },
   compartilhar: (el) => compartilhar(D().conferencias.find((c) => c.id === el.dataset.c)),
   tratar: (el) => formTratar(D().conferencias.find((c) => c.id === el.dataset.c), el.dataset.i),
+  desbloquear: () => desbloquear(),
+  senha: formSenha,
+  bloquear: () => { ajustesLiberado = false; VIEWS.ajustes(); },
+  'remover-senha': () => modal({ titulo: 'Remover PIN?', corpo: '<p>Os Ajustes ficarão abertos para qualquer pessoa com o aparelho.</p>', ok: 'Remover', perigo: true,
+    aoConfirmar() { D().config.senha = null; DB.salvar(); toast('PIN removido'); VIEWS.ajustes(); } }),
   'salvar-cfg': () => {
     const linhas = (s) => $(s).value.split('\n').map((x) => x.trim()).filter(Boolean);
     const cfg = D().config;

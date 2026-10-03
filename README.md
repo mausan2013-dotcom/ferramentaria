@@ -15,6 +15,8 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - **Entrada / Baixa** registra compras, quebras, envios para reparo etc. sem gerar alerta falso.
 - Opção de **contagem às cegas** (esconde o número anterior durante a contagem).
 - Backup JSON, restauração e exportação CSV (abre no Excel).
+- **PIN do supervisor** (opcional) trava a tela de Ajustes. Só o hash com sal fica gravado; 5 erros = espera de 30s.
+  Se o PIN for esquecido, não há recuperação pelo app.
 
 ## Preparado para sincronizar (etapa futura)
 Dados em `localStorage` (chave `ferramentaria_v1`), todos os registros com `id` único, datas ISO e
@@ -24,3 +26,7 @@ Dados em `localStorage` (chave `ferramentaria_v1`), todos os registros com `id` 
 - Cadastro (individual e importação em lista), locais, categorias, desativação com baixa automática
 - Conferência de turno com comparação, alertas, motivos rápidos, tratamento das divergências
 - Histórico por conferência e por ferramenta, ajustes de equipe/turnos, backup/CSV, PWA offline
+
+## Versão 1.1 (02/10/2026)
+- Trava dos Ajustes com PIN do supervisor (criar, trocar, remover, travar agora; trava de novo ao sair da tela)
+- Avisos na tela não se sobrepõem mais
