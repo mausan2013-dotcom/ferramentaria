@@ -31,7 +31,12 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
   `04-niveis-acesso.sql` (tabela `perfis`, funções `eh_supervisor` e `definir_papel`, regras por nível),
   `05-apagar-historico.sql` (só supervisor grava/altera conferência marcada como excluída),
   `06-notificacoes.sql` (tabela `push_inscricoes` + gatilho que chama a função; CONTÉM o segredo do aviso),
-  `functions/notifica-supervisor/index.ts` (Edge Function, "Verify JWT" desligado).
+  `functions/notifica-supervisor/index.ts` (Edge Function, "Verify JWT" desligado),
+  `07-supervisores.sql` (define os supervisores por e-mail),
+  `08-permissoes-servico.sql` (projeto novo: a chave de serviço também precisa de GRANT em perfis/push_inscricoes).
+- Segredos da função: VAPID_PUBLICA, VAPID_PRIVADA, AVISO_SEGREDO e CHAVE_SERVICO (sb_secret_… de Project Settings
+  → API Keys; a SUPABASE_SERVICE_ROLE_KEY injetada não funcionou neste projeto). Se a função falhar, ela responde
+  com {erro, detalhe, chave} — testar com curl e o cabeçalho x-aviso-segredo.
 - `supabase/SEGREDOS-nao-compartilhar.txt`: chaves VAPID e segredo do aviso (vão em Edge Functions → Secrets).
   Nunca publicar (o publica-ferramentaria só copia index/manifest/sw/ícones).
 - Local primeiro: grava no aparelho (`ferramentaria_v1`) e sincroniza quando há internet (ao abrir, ao voltar o sinal,
@@ -98,3 +103,12 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 
 ## Versão 1.10 (03/10/2026)
 - Texto sob o logo no login: "FERRAMENTARIA INTELIGENTE - REVISTAMENTO ZTO"
+
+## Manuais (03/10/2026)
+- `Manuais/Ferramentaria - Guia do Tecnico.pdf` (14 p.) e `Manuais/Ferramentaria - Guia do Supervisor.pdf` (22 p.)
+- Fonte em `Manuais/fonte/`: `capturar_telas.py` (telas com dados fictícios e nuvem simulada; precisa do app servido
+  em localhost:8765) e `montar_manuais.py` + `manual.css` (HTML → PDF via Playwright). Ao mudar o app, rodar os dois.
+
+## Versão 1.11 (05/10/2026)
+- Supervisor pode **apagar ferramenta** (detalhe da ferramenta → "Apagar ferramenta"): some de todos os aparelhos com as
+  movimentações, por marca de exclusão sincronizada (excluidos.itens / excluidos.movs). O histórico das conferências mantém o nome.

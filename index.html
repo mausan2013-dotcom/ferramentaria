@@ -155,7 +155,7 @@ const DB = {
       movs: [],          // {id, itemId, qtd (+/-), tipo, motivo, por, em}
       conferencias: [],  // {id, turno, responsavel, iniciadaEm, fechadaEm, linhas[], envios{}}
       tratamentos: [],   // {id: confId + ':' + itemId, confId, itemId, nota, por, em}
-      excluidos: { conferencias: [], tratamentos: [] },  // marcas de exclusão {id, excluida, excluidaEm, por}: levam o apagar aos outros aparelhos
+      excluidos: { conferencias: [], tratamentos: [], itens: [], movs: [] },  // marcas de exclusão {id, excluida, excluidaEm, por}: levam o apagar aos outros aparelhos
       rascunho: null     // conferência em andamento: fica só neste aparelho
     };
   },
@@ -167,7 +167,7 @@ const DB = {
     delete this.dados.config.senha;  // PIN das versões 1.1–1.4: substituído pelos níveis de acesso
     for (const k of ['itens', 'movs', 'conferencias', 'tratamentos']) if (!Array.isArray(this.dados[k])) this.dados[k] = [];
     this.dados.excluidos = this.dados.excluidos || {};
-    for (const k of ['conferencias', 'tratamentos']) if (!Array.isArray(this.dados.excluidos[k])) this.dados.excluidos[k] = [];
+    for (const k of ['conferencias', 'tratamentos', 'itens', 'movs']) if (!Array.isArray(this.dados.excluidos[k])) this.dados.excluidos[k] = [];
     // v1.2 guardava os tratamentos dentro da conferência; agora são registros próprios (sincronizam sem conflito)
     for (const c of this.dados.conferencias) if (c.tratamentos) {
       for (const [itemId, t] of Object.entries(c.tratamentos)) {
@@ -215,7 +215,7 @@ const itemPorId = (id) => D().itens.find((i) => i.id === id);
 const supervisor = () => !Nuvem.ativa() || Nuvem.sessao.papel === 'supervisor';
 const SO_SUPERVISOR = new Set(['novo-item', 'editar-item', 'mov', 'importar', 'desativar', 'reativar', 'tratar',
   'salvar-cfg', 'salvar-alertas', 'backup', 'restaurar', 'csv', 'apagar', 'sair', 'apagar-historico', 'apagar-conf',
-  'aviso-ativar', 'aviso-desativar', 'aviso-teste']);
+  'aviso-ativar', 'aviso-desativar', 'aviso-teste', 'apagar-item']);
 const tratamentoDe = (confId, itemId) => D().tratamentos.find((t) => t.id === confId + ':' + itemId);
 const ultimaConferencia = () => D().conferencias.reduce((u, c) => (!u || c.fechadaEm > u.fechadaEm ? c : u), null);
 
@@ -561,7 +561,8 @@ VIEWS.item = (id) => {
     <div class="list">${hist.map((c) => { const l = c.linhas.find((x) => x.itemId === id); const d = l.contado - l.esperado; return `<a class="li" href="#conf/${c.id}"><div class="grow"><div class="t">${esc(c.turno)} · ${fmt(c.fechadaEm)}</div><div class="s">${esc(c.responsavel)}${l.justificativa ? ' · ' + esc(l.justificativa) : ''}</div></div>${d ? `<span class="tag bad">${difTexto(d)}</span>` : ''}<span class="qty">${l.contado}</span></a>`; }).join('') || '<div class="empty">Ainda não conferida.</div>'}</div>
     <div class="group-h">Movimentações</div>
     <div class="list">${movs.map((m) => `<div class="li"><div class="grow"><div class="t">${esc(m.tipo)}${m.motivo ? ' · ' + esc(m.motivo) : ''}</div><div class="s">${fmt(m.em, true)}${m.por ? ' · ' + esc(m.por) : ''}</div></div><span class="qty" style="color:${m.qtd < 0 ? 'var(--bad)' : 'var(--ok)'}">${m.qtd > 0 ? '+' : ''}${m.qtd}</span></div>`).join('') || '<div class="empty">Nenhuma.</div>'}</div>
-    ${i.ativo !== false && supervisor() ? `<button class="btn danger full" data-a="desativar" data-i="${id}">Desativar ferramenta</button>` : ''}`;
+    ${i.ativo !== false && supervisor() ? `<button class="btn danger full" data-a="desativar" data-i="${id}">Desativar ferramenta</button>` : ''}
+    ${supervisor() ? `<button class="btn danger full" data-a="apagar-item" data-i="${id}" style="margin-top:10px">Apagar ferramenta</button>` : ''}`;
 };
 
 function formItem(i) {
@@ -667,6 +668,27 @@ function alertasDe(ids) {
   const set = new Set(ids);
   return divergenciasPendentes().filter(({ c }) => set.has(c.id)).length;
 }
+// Apagar ferramenta (supervisor): some de todos os aparelhos junto com as movimentações dela.
+// As conferências antigas continuam mostrando o nome (cada uma guarda uma cópia das linhas).
+function formApagarItem(i) {
+  const movs = D().movs.filter((m) => m.itemId === i.id).length;
+  modal({
+    titulo: 'Apagar ferramenta?',
+    corpo: `<p><b>${esc(i.nome)}</b>${i.codigo ? ' (' + esc(i.codigo) + ')' : ''} e as ${movs} movimentação(ões) dela serão apagadas em todos os aparelhos. Não dá para desfazer.</p>
+      <p class="small muted">As conferências antigas continuam mostrando esta ferramenta no histórico.</p>
+      ${i.ativo !== false ? '<p class="small" style="color:var(--warn)">Se a ferramenta só saiu de uso (quebrou, foi transferida), prefira <b>Desativar</b>: ela sai das conferências e o registro fica guardado.</p>' : ''}`,
+    ok: 'Apagar', perigo: true,
+    aoConfirmar() {
+      const marca = (id) => ({ id, excluida: true, excluidaEm: agora(), por: (Nuvem.sessao && Nuvem.sessao.email) || '' });
+      D().excluidos.itens.push(marca(i.id));
+      for (const m of D().movs.filter((m) => m.itemId === i.id)) D().excluidos.movs.push(marca(m.id));
+      D().movs = D().movs.filter((m) => m.itemId !== i.id);
+      D().itens = D().itens.filter((x) => x.id !== i.id);
+      DB.salvar(); toast('Ferramenta apagada'); ir('ferramentas');
+    }
+  });
+}
+
 function formApagarHistorico() {
   const ult = ultimaConferencia();
   const outras = D().conferencias.filter((c) => c !== ult);
@@ -815,7 +837,7 @@ VIEWS.ajustes = () => {
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.10 · ferramenta interna · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.11 · ferramenta interna · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -1286,6 +1308,7 @@ const ACOES = {
     catch (e) { toast('Falha no teste: ' + e.message); }
   },
   'apagar-historico': formApagarHistorico,
+  'apagar-item': (el) => formApagarItem(itemPorId(el.dataset.i)),
   'apagar-conf': (el) => formApagarConferencia(D().conferencias.find((c) => c.id === el.dataset.c)),
   sair: async () => {
     if (navigator.onLine) await Nuvem.sincronizar();
