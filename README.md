@@ -124,3 +124,7 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - Coleção nova `cautelas` (SQL `09-cautelas.sql`, testado em Postgres local com pgserver). Enquanto a tabela não existe na nuvem,
   o app guarda as retiradas no aparelho e envia depois (AUSENTES).
 - Exportar retiradas (.csv) em Ajustes → Dados. Aba "Ferramentas" do menu passou a se chamar "Itens" (7 abas).
+
+## Versão 1.13 (19/10/2026)
+- **Importar lista não duplica mais**: ferramenta com o mesmo nome de uma já cadastrada (sem diferenciar acento/maiúscula)
+  fica de fora, e o aviso diz quantas foram ignoradas. Duplicatas antigas: apagar uma das cópias em Itens → ferramenta → Apagar.

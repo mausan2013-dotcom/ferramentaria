@@ -689,17 +689,21 @@ function formImportar() {
       <textarea id="impTxt" style="min-height:180px" placeholder="Chave de boca 19 mm; 4; Caixa 1; CB-19; Chaves&#10;Torquímetro 40-200 Nm; 1; Armário; TQ-01; Medição"></textarea>`,
     ok: 'Importar',
     aoConfirmar(dlg) {
-      let n = 0;
+      let n = 0, rep = 0;
+      const chave = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const ja = new Set(D().itens.filter((i) => i.ativo !== false).map((i) => chave(i.nome)));
       for (const linha of dlg.querySelector('#impTxt').value.split(/\r?\n/)) {
         const p = linha.split(/[;\t]/).map((s) => s.trim());
         if (!p[0]) continue;
+        if (ja.has(chave(p[0]))) { rep++; continue; }  // já cadastrada: não duplica
+        ja.add(chave(p[0]));
         const it = { id: uid(), nome: p[0], local: p[2] || '', codigo: p[3] || '', categoria: p[4] || '', obs: '', ativo: true, criadoEm: agora(), atualizadoEm: agora() };
         D().itens.push(it);
         const q = Math.max(0, Math.floor(Number((p[1] || '1').replace(',', '.')) || 0));
         if (q) D().movs.push({ id: uid(), itemId: it.id, qtd: q, tipo: 'Cadastro', motivo: 'Quantidade inicial (importação)', por: '', em: agora() });
         n++;
       }
-      DB.salvar(); toast(`${n} ferramenta(s) importada(s)`); render();
+      DB.salvar(); toast(`${n} ferramenta(s) importada(s)${rep ? ` · ${rep} repetida(s) ignorada(s) (já cadastrada)` : ''}`); render();
     }
   });
 }
@@ -1033,7 +1037,7 @@ VIEWS.ajustes = () => {
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.12 · ferramenta interna · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.13 · ferramenta interna · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
