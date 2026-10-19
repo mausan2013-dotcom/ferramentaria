@@ -128,3 +128,8 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 ## Versão 1.13 (19/10/2026)
 - **Importar lista não duplica mais**: ferramenta com o mesmo nome de uma já cadastrada (sem diferenciar acento/maiúscula)
   fica de fora, e o aviso diz quantas foram ignoradas. Duplicatas antigas: apagar uma das cópias em Itens → ferramenta → Apagar.
+
+## Versão 1.14 (19/10/2026)
+- **Conferência mostra o que está com mecânicos** (retiradas em aberto da aba Retirada): aviso na tela de início da conferência,
+  em cada ferramenta durante a contagem ("Rádio 3 — João, desde …") e na janela de divergência, com o motivo
+  "Com mecânico" que preenche a justificativa com unidades e nomes (só quando falta item).

@@ -99,6 +99,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .cnt { padding: 12px 14px; border-top: 1px solid var(--line); }
 .cnt:first-child { border-top: 0; }
 .cnt.dif { background: var(--bad-bg); }
+.com-mec { margin-top: 6px; padding: 6px 9px; border-left: 3px solid var(--warn); background: var(--warn-bg); border-radius: 6px; font-size: 13px; color: var(--title); }
+.com-mec b { color: var(--warn); }
 .cnt .s { font-size: 13px; color: var(--muted); }
 .cnt .top { display: flex; gap: 8px; align-items: flex-start; }
 .cnt .ctl { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
@@ -256,6 +258,14 @@ function emServico(d = new Date()) {
 const itensUnidade = () => itensAtivos().filter((i) => i.unidades);
 const unidadesDe = (i) => Array.from({ length: Math.max(0, esperado(i.id)) }, (_, k) => k + 1);
 const cautelasAbertas = () => D().cautelas.filter((c) => !c.devolvidaEm);
+// Retiradas em aberto de uma ferramenta (para avisar quem está conferindo)
+const comMecanicos = (itemId) => cautelasAbertas().filter((c) => c.itemId === itemId).sort((a, b) => a.unidade - b.unidade);
+const textoComMec = (lst) => lst.map((c) => `${c.itemNome} ${c.unidade} — ${primeiroNome(c.nome)}`).join('; ');
+function avisoComMec(itemId) {
+  const lst = comMecanicos(itemId);
+  if (!lst.length) return '';
+  return `<div class="com-mec"><b>⚠ ${lst.length} com mecânico${lst.length > 1 ? 's' : ''}:</b> ${lst.map((c) => `${esc(c.itemNome)} ${c.unidade} — <b style="color:var(--title)">${esc(primeiroNome(c.nome))}</b> <span class="muted">(desde ${fmt(c.retiradaEm)})</span>`).join('; ')}</div>`;
+}
 const colabPorId = (id) => (D().config.colaboradores || []).find((c) => c.id === id);
 const ORDEM_FUNCAO = (f) => (/l[ií]der/i.test(f) ? 0 : /valid|especializ/i.test(f) ? 1 : 2);
 function porUnidade() {  // "itemId:n" → [cautelas abertas]
@@ -392,6 +402,9 @@ function telaInicioConferencia() {
           : `<input id="cResp" placeholder="Nome de quem está conferindo" autocomplete="name">`}
       </div>
       <div class="muted small">${ult ? `Comparando com: <b>${esc(ult.turno)}</b> de ${fmt(ult.fechadaEm)} (${esc(ult.responsavel)})` : 'Primeira conferência: a contagem será comparada com as quantidades cadastradas.'}</div>
+      ${(() => { const ab = cautelasAbertas().filter((c) => itemPorId(c.itemId)); if (!ab.length) return '';
+        const pess = [...new Set(ab.map((c) => primeiroNome(c.nome)))];
+        return `<div class="com-mec"><b>⚠ ${ab.length} item(ns) com mecânicos agora</b> (${esc(pess.slice(0, 4).join(', '))}${pess.length > 4 ? '…' : ''}). Eles aparecem na contagem, em cada ferramenta.</div>`; })()}
       <button class="btn big primary" data-a="iniciar-conf">Começar contagem</button>
     </div>`;
   $('#cTurno').addEventListener('click', (e) => {
@@ -434,7 +447,7 @@ function linhaContagem(i, r, cegas) {
   if (temC) tag = cegas ? '<span class="tag">contado</span>' : dif === 0 ? '<span class="tag ok">confere</span>' : `<span class="tag bad">${difTexto(dif)}</span>`;
   return `<div class="cnt ${temC && dif && !cegas ? 'dif' : ''}" data-item="${i.id}">
     <div class="top"><div class="grow"><div class="t" style="font-weight:600">${esc(i.nome)}</div>
-      <div class="s small muted">${i.codigo ? esc(i.codigo) + ' · ' : ''}${cegas ? 'contagem às cegas' : `turno anterior: <b>${esp}</b>`}</div>${mvTxt}</div>${tag}</div>
+      <div class="s small muted">${i.codigo ? esc(i.codigo) + ' · ' : ''}${cegas ? 'contagem às cegas' : `turno anterior: <b>${esp}</b>`}</div>${mvTxt}${avisoComMec(i.id)}</div>${tag}</div>
     <div class="ctl">
       <button data-a="menos" aria-label="Diminuir">−</button>
       <input type="number" inputmode="numeric" min="0" value="${temC ? c : ''}" placeholder="—" data-a="qtd" aria-label="Quantidade contada">
@@ -478,8 +491,8 @@ function fecharConferencia() {
     corpo: `<p class="small muted">Informe o motivo de cada diferença. O alerta fica registrado e pendente até ser tratado.</p>` +
       difs.map((l, k) => `<div class="card" style="margin:0 0 10px;border-color:var(--bad)">
         <div class="row"><b class="grow">${esc(l.nome)}</b><span class="tag bad">${difTexto(l.contado - l.esperado)}</span></div>
-        <div class="small muted">Anterior ${l.esperado} → contado ${l.contado}</div>
-        <div class="chips" data-k="${k}">${MOTIVOS_DIF.map((m) => `<button type="button" data-v="${esc(m)}">${esc(m)}</button>`).join('')}</div>
+        <div class="small muted">Anterior ${l.esperado} → contado ${l.contado}</div>${avisoComMec(l.itemId)}
+        <div class="chips" data-k="${k}">${comMecanicos(l.itemId).length && l.contado < l.esperado ? `<button type="button" data-v="${esc('Com mecânico: ' + textoComMec(comMecanicos(l.itemId)))}">Com mecânico</button>` : ''}${MOTIVOS_DIF.map((m) => `<button type="button" data-v="${esc(m)}">${esc(m)}</button>`).join('')}</div>
         <input data-just="${k}" placeholder="Motivo / observação (obrigatório)"></div>`).join(''),
     ok: 'Registrar com divergência', cancelar: 'Recontar',
     aoAbrir(dlg) {
@@ -1037,7 +1050,7 @@ VIEWS.ajustes = () => {
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.13 · ferramenta interna · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.14 · ferramenta interna · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
