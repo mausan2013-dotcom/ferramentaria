@@ -49,7 +49,7 @@ header.top .sinc.offline, header.top .sinc.erro { background: var(--warn-bg); co
 header.top button { background: none; border: 0; color: inherit; font-size: 26px; padding: 0 6px 0 0; line-height: 1; }
 main { padding: 14px 16px; max-width: 720px; margin: 0 auto; }
 nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; background: var(--card); border-top: 1px solid var(--line); display: flex; padding-bottom: env(safe-area-inset-bottom); }
-nav.tabs a { flex: 1; text-align: center; padding: 9px 2px 10px; color: var(--muted); text-decoration: none; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; border-top: 3px solid transparent; margin-top: -1px; }
+nav.tabs a { flex: 1; min-width: 0; text-align: center; padding: 9px 1px 10px; color: var(--muted); text-decoration: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 3px solid transparent; margin-top: -1px; }
 nav.tabs a svg { display: block; margin: 0 auto 3px; width: 24px; height: 24px; }
 nav.tabs a.on { color: var(--title); border-top-color: var(--accent); }
 nav.tabs a.on svg { color: var(--accent); }
@@ -122,6 +122,24 @@ dialog .df .btn { flex: 1; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
 .seg button { flex: 1; min-height: 48px; border: 0; background: var(--card); color: var(--title); font: inherit; font-weight: 700; }
 .seg button.on { background: var(--accent); color: var(--accent-ink); }
+/* Retirada e Quadro */
+.pessoas { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.pessoas button { text-align: left; min-height: 56px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); color: var(--title); font: inherit; font-weight: 700; line-height: 1.25; }
+.pessoas button small { display: block; font-weight: 600; color: var(--muted); font-size: 12px; }
+.pessoas button .tag { margin-top: 4px; }
+.unids { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 14px; }
+.unid { min-width: 52px; min-height: 48px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--title); font: inherit; font-weight: 800; font-size: 17px; line-height: 1.1; }
+.unid small { display: block; font-size: 10px; font-weight: 700; color: var(--muted); max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unid.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.unid.on small { color: #fff; }
+.unid.ocupada { background: var(--card); border-style: dashed; color: var(--muted); }
+.unid.livre { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.unid.dup { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
+.grupo-t { padding: 12px 14px 0; font-weight: 800; color: var(--title); display: flex; justify-content: space-between; gap: 8px; }
+.grupo-t span { font-weight: 600; color: var(--muted); font-size: 13px; }
+.chk { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.chk:first-child { border-top: 0; }
+.chk input { width: 24px; min-height: 24px; height: 24px; flex: none; }
 .alerta { border-left: 4px solid var(--bad); }
 </style>
 </head>
@@ -150,11 +168,12 @@ const DB = {
       versao: 1,
       dispositivo: uid(),
       // contatos = [{nome, numero}] para alertas
-      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false, contatos: [], whatsAuto: true },
+      config: { oficina: '', turnos: ['Turno A', 'Turno B', 'Turno C'], equipe: [], cegas: false, contatos: [], whatsAuto: true, colaboradores: [] },  // colaboradores = escala [{id, nome, turno A–D, funcao}]
       itens: [],         // {id, codigo, nome, categoria, local, obs, ativo, criadoEm, atualizadoEm}
       movs: [],          // {id, itemId, qtd (+/-), tipo, motivo, por, em}
       conferencias: [],  // {id, turno, responsavel, iniciadaEm, fechadaEm, linhas[], envios{}}
       tratamentos: [],   // {id: confId + ':' + itemId, confId, itemId, nota, por, em}
+      cautelas: [],      // retiradas por unidade {id, colabId, nome, turno, itemId, itemNome, unidade, retiradaEm, devolvidaEm, devolvidaPor}
       excluidos: { conferencias: [], tratamentos: [], itens: [], movs: [] },  // marcas de exclusão {id, excluida, excluidaEm, por}: levam o apagar aos outros aparelhos
       rascunho: null     // conferência em andamento: fica só neste aparelho
     };
@@ -165,7 +184,7 @@ const DB = {
     const v = this.vazio();
     this.dados.config = Object.assign(v.config, this.dados.config || {});
     delete this.dados.config.senha;  // PIN das versões 1.1–1.4: substituído pelos níveis de acesso
-    for (const k of ['itens', 'movs', 'conferencias', 'tratamentos']) if (!Array.isArray(this.dados[k])) this.dados[k] = [];
+    for (const k of ['itens', 'movs', 'conferencias', 'tratamentos', 'cautelas']) if (!Array.isArray(this.dados[k])) this.dados[k] = [];
     this.dados.excluidos = this.dados.excluidos || {};
     for (const k of ['conferencias', 'tratamentos', 'itens', 'movs']) if (!Array.isArray(this.dados.excluidos[k])) this.dados.excluidos[k] = [];
     // v1.2 guardava os tratamentos dentro da conferência; agora são registros próprios (sincronizam sem conflito)
@@ -215,7 +234,36 @@ const itemPorId = (id) => D().itens.find((i) => i.id === id);
 const supervisor = () => !Nuvem.ativa() || Nuvem.sessao.papel === 'supervisor';
 const SO_SUPERVISOR = new Set(['novo-item', 'editar-item', 'mov', 'importar', 'desativar', 'reativar', 'tratar',
   'salvar-cfg', 'salvar-alertas', 'backup', 'restaurar', 'csv', 'apagar', 'sair', 'apagar-historico', 'apagar-conf',
-  'aviso-ativar', 'aviso-desativar', 'aviso-teste', 'apagar-item']);
+  'aviso-ativar', 'aviso-desativar', 'aviso-teste', 'apagar-item', 'quadro-dev', 'csv-retiradas', 'salvar-escala']);
+/* ---------- Escala (mesma regra do app Revistamento ZTO) ----------
+   Turnos A–D em ciclo de 8 dias: 6,6,14,14,22,22,R,F (06–14, 14–22, 22–06, repouso, folga). */
+const CICLO = ['6', '6', '14', '14', '22', '22', 'R', 'F'];
+const DESLOC = { A: 6, B: 4, C: 2, D: 0 };                 // em relação a 01/10/2026
+const BASE_ESCALA = new Date(2026, 9, 1);
+const HORARIO = { '6': '06–14', '14': '14–22', '22': '22–06' };
+const diasDesde = (d) => Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - BASE_ESCALA) / 864e5);
+const escalaDia = (eq, data) => CICLO[(((diasDesde(data) - DESLOC[eq]) % 8) + 8) % 8];
+const equipeNoHorario = (data, h) => 'ABCD'.split('').find((e) => escalaDia(e, data) === h);
+function emServico(d = new Date()) {
+  const h = d.getHours();
+  if (h >= 6 && h < 14) return { turno: equipeNoHorario(d, '6'), h: '6' };
+  if (h >= 14 && h < 22) return { turno: equipeNoHorario(d, '14'), h: '14' };
+  return { turno: equipeNoHorario(h < 6 ? new Date(d.getTime() - 864e5) : d, '22'), h: '22' };
+}
+
+/* ---------- Retirada (cautela) por unidade ----------
+   Ferramenta com "controle por unidade" vira unidades numeradas pela quantidade esperada (Rádio com 12 → Rádio 1 a 12). */
+const itensUnidade = () => itensAtivos().filter((i) => i.unidades);
+const unidadesDe = (i) => Array.from({ length: Math.max(0, esperado(i.id)) }, (_, k) => k + 1);
+const cautelasAbertas = () => D().cautelas.filter((c) => !c.devolvidaEm);
+const colabPorId = (id) => (D().config.colaboradores || []).find((c) => c.id === id);
+const ORDEM_FUNCAO = (f) => (/l[ií]der/i.test(f) ? 0 : /valid|especializ/i.test(f) ? 1 : 2);
+function porUnidade() {  // "itemId:n" → [cautelas abertas]
+  const m = {};
+  for (const c of cautelasAbertas()) (m[c.itemId + ':' + c.unidade] ||= []).push(c);
+  return m;
+}
+const primeiroNome = (n) => String(n || '').trim().split(/\s+/).slice(0, 2).join(' ');
 const tratamentoDe = (confId, itemId) => D().tratamentos.find((t) => t.id === confId + ':' + itemId);
 const ultimaConferencia = () => D().conferencias.reduce((u, c) => (!u || c.fechadaEm > u.fechadaEm ? c : u), null);
 
@@ -259,10 +307,12 @@ const ICONES = {
   inicio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   conferir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3"/><path d="M9 13l2 2 4-4"/></svg>',
   ferramentas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
+  retirada: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v6"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>',
+  quadro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/><circle cx="6" cy="7" r=".5"/></svg>',
   historico: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>'
 };
-const ABAS = [['inicio', 'Início'], ['conferir', 'Conferir'], ['ferramentas', 'Ferramentas'], ['historico', 'Histórico'], ['ajustes', 'Ajustes']];
+const ABAS = [['inicio', 'Início'], ['conferir', 'Conferir'], ['retirada', 'Retirada'], ['quadro', 'Quadro'], ['ferramentas', 'Itens'], ['historico', 'Histórico'], ['ajustes', 'Ajustes']];
 
 function ir(h) { location.hash = h; }
 function rota() {
@@ -310,6 +360,8 @@ VIEWS.inicio = () => {
       <div class="kpi"><b>${total}</b><span>unidades esperadas</span></div>
       <div class="kpi"><b style="color:${pend.length ? 'var(--bad)' : 'inherit'}">${pend.length}</b><span>alertas pendentes</span></div>
     </div>
+    ${cautelasAbertas().length ? (() => { const ab = cautelasAbertas(), pes = new Set(ab.map((c) => c.colabId || c.nome)).size;
+      return `<a class="card row" href="#quadro" style="text-decoration:none;color:inherit"><div class="grow"><b style="color:var(--title)">${ab.length} item(ns) retirado(s) agora</b><div class="small muted">com ${pes} colaborador(es) · toque para ver o quadro</div></div><span class="qty">›</span></a>`; })() : ''}
     ${itens.length ? `<button class="btn big primary" data-a="ir" data-h="conferir">${rasc ? 'Continuar conferência em andamento' : 'Iniciar conferência de turno'}</button>`
       : supervisor() ? `<button class="btn big primary" data-a="novo-item">Cadastrar primeira ferramenta</button>` : '<div class="card muted">Nenhuma ferramenta cadastrada. O cadastro é feito pelo supervisor.</div>'}
     ${pend.length ? `<div class="group-h">Alertas pendentes</div><div class="list">${pend.map(({ c, l }) => `
@@ -579,6 +631,7 @@ function formItem(i) {
       <div><label class="f">Local (caixa, armário, carrinho…)</label><input id="iLocal" list="dlLocais" value="${esc(i.local)}"><datalist id="dlLocais">${locais.map((l) => `<option value="${esc(l)}">`).join('')}</datalist></div>
       <div><label class="f">Categoria</label><input id="iCat" list="dlCats" value="${esc(i.categoria)}"><datalist id="dlCats">${cats.map((l) => `<option value="${esc(l)}">`).join('')}</datalist></div>
       <div><label class="f">Observação</label><textarea id="iObs">${esc(i.obs)}</textarea></div>
+      <label class="row" style="gap:12px"><input type="checkbox" id="iUnid" ${i.unidades ? 'checked' : ''} style="width:24px;min-height:24px"> <span class="grow">Controle por unidade (retirada)<br><span class="small muted">As unidades ficam numeradas pela quantidade (ex.: Rádio 1 a 12) e cada colaborador marca na aba Retirada quais pegou.</span></span></label>
       ${!novo ? '<p class="small muted">Para mudar a quantidade use “Entrada / Baixa”, assim a alteração fica registrada e não gera alerta falso na próxima conferência.</p>' : ''}
     </div>`,
     ok: 'Salvar',
@@ -589,7 +642,7 @@ function formItem(i) {
     },
     aoConfirmar(dlg) {
       const v = (s) => dlg.querySelector(s).value.trim();
-      const dados = { nome: v('#iNome'), codigo: v('#iCod'), local: v('#iLocal'), categoria: v('#iCat'), obs: v('#iObs'), atualizadoEm: agora() };
+      const dados = { nome: v('#iNome'), codigo: v('#iCod'), local: v('#iLocal'), categoria: v('#iCat'), obs: v('#iObs'), unidades: dlg.querySelector('#iUnid').checked, atualizadoEm: agora() };
       if (novo) {
         const it = Object.assign({ id: uid(), ativo: true, criadoEm: agora() }, dados);
         D().itens.push(it);
@@ -738,6 +791,142 @@ function formApagarConferencia(c) {
   });
 }
 
+/* --- Retirada: o colaborador escolhe o nome, marca o que pegou e devolve --- */
+let retColab = null;          // {id, nome, turno, funcao} escolhido neste aparelho
+let retSel = new Set();       // unidades marcadas para retirar ("itemId:n")
+VIEWS.retirada = () => {
+  topo('Retirada');
+  const unids = itensUnidade();
+  if (!unids.length) {
+    $('#app').innerHTML = `<div class="empty">Nenhuma ferramenta com controle por unidade.<br>${supervisor() ? 'Em Ferramentas, edite a ferramenta e ligue “Controle por unidade”.' : 'Peça ao supervisor para configurar as ferramentas de retirada.'}</div>`;
+    return;
+  }
+  if (!retColab) return telaEscolherColab();
+  telaRetirar(unids);
+};
+
+function telaEscolherColab() {
+  const cols = D().config.colaboradores || [];
+  const sv = emServico();
+  const abertas = cautelasAbertas();
+  const qtdCom = (c) => abertas.filter((x) => x.colabId === c.id).length;
+  const ordena = (a, b) => ORDEM_FUNCAO(a.funcao) - ORDEM_FUNCAO(b.funcao) || a.nome.localeCompare(b.nome, 'pt');
+  const doTurno = cols.filter((c) => c.turno === sv.turno).sort(ordena);
+  const outros = cols.filter((c) => c.turno !== sv.turno).sort((a, b) => a.nome.localeCompare(b.nome, 'pt'));
+  const botao = (c) => `<button data-a="ret-colab" data-c="${esc(c.id)}">${esc(c.nome)}<small>Turno ${esc(c.turno || '–')}${c.funcao ? ' · ' + esc(c.funcao) : ''}</small>${qtdCom(c) ? `<span class="tag warn">com ${qtdCom(c)} item(ns)</span>` : ''}</button>`;
+  $('#app').innerHTML = `
+    <div class="status neutral" style="padding-bottom:22px"><div class="big" style="font-size:19px">Quem está retirando?</div>
+      <div>Em serviço agora: <b>Turno ${esc(sv.turno || '?')}</b> (${HORARIO[sv.h]}) · ${fmt(agora()).slice(0, 5)}</div></div>
+    ${cols.length ? `
+      ${doTurno.length ? `<div class="group-h">Turno ${esc(sv.turno)} — em serviço</div><div class="pessoas">${doTurno.map(botao).join('')}</div>` : ''}
+      <div class="group-h">Outro turno</div>
+      <select id="retOutro"><option value="">Escolha o nome…</option>${outros.map((c) => `<option value="${esc(c.id)}">${esc(c.nome)} (Turno ${esc(c.turno || '–')})</option>`).join('')}</select>`
+    : `<div class="card small muted">A equipe da escala ainda não foi cadastrada${supervisor() ? ' — cadastre em Ajustes → Equipe da escala' : ' (o supervisor cadastra em Ajustes)'}. Por enquanto, digite o nome abaixo.</div>`}
+    <div class="group-h">Nome não está na lista?</div>
+    <div class="row"><input id="retLivre" class="grow" placeholder="Digite o nome completo" autocomplete="off"><button class="btn" data-a="ret-livre">Usar</button></div>`;
+  const o = $('#retOutro');
+  if (o) o.addEventListener('change', () => { if (o.value) escolherColab(colabPorId(o.value)); });
+}
+function escolherColab(c) { if (!c) return; retColab = c; retSel = new Set(); VIEWS.retirada(); window.scrollTo(0, 0); }
+
+function telaRetirar(unids) {
+  const c = retColab, mapa = porUnidade();
+  const minhas = cautelasAbertas().filter((x) => (c.id ? x.colabId === c.id : x.nome === c.nome))
+    .sort((a, b) => a.itemNome.localeCompare(b.itemNome, 'pt') || a.unidade - b.unidade);
+  const grupos = unids.map((i) => {
+    const bts = unidadesDe(i).map((n) => {
+      const k = i.id + ':' + n, com = mapa[k] || [];
+      const meu = com.some((x) => minhas.includes(x));
+      if (meu) return `<button class="unid ocupada" disabled>${n}<small>com você</small></button>`;
+      if (com.length) return `<button class="unid ocupada" disabled>${n}<small>${esc(primeiroNome(com[0].nome))}</small></button>`;
+      return `<button class="unid ${retSel.has(k) ? 'on' : ''}" data-a="ret-unid" data-k="${k}">${n}</button>`;
+    }).join('');
+    const livres = unidadesDe(i).filter((n) => !(mapa[i.id + ':' + n] || []).length).length;
+    return `<div class="list"><div class="grupo-t">${esc(i.nome)}<span>${livres} livre(s) de ${unidadesDe(i).length}</span></div><div class="unids">${bts || '<span class="small muted">Sem unidades (quantidade 0).</span>'}</div></div>`;
+  }).join('');
+  $('#app').innerHTML = `
+    <div class="card row"><div class="grow"><b style="color:var(--title);font-size:17px">${esc(c.nome)}</b><div class="small muted">${c.turno ? 'Turno ' + esc(c.turno) : 'Fora da escala'}${c.funcao ? ' · ' + esc(c.funcao) : ''} · ${fmt(agora())}</div></div>
+      <button class="btn" data-a="ret-trocar">Trocar</button></div>
+    ${minhas.length ? `<div class="group-h">Com você agora — marque o que está devolvendo</div>
+      <div class="list" id="retDev">${minhas.map((x) => `<label class="chk"><input type="checkbox" value="${esc(x.id)}"><span class="grow"><b style="color:var(--title)">${esc(x.itemNome)} ${x.unidade}</b><br><span class="small muted">retirado ${fmt(x.retiradaEm)}</span></span></label>`).join('')}</div>
+      <div class="row" style="margin-bottom:6px"><button class="btn grow" data-a="ret-dev-sel">Devolver marcados</button><button class="btn primary grow" data-a="ret-dev-tudo">Devolver tudo</button></div>` : ''}
+    <div class="group-h">Pegar itens — toque nos números</div>
+    ${grupos}
+    <div class="sticky-foot"><button class="btn big primary" data-a="ret-registrar" ${retSel.size ? '' : 'disabled'}>Registrar retirada${retSel.size ? ` (${retSel.size})` : ''}</button></div>`;
+}
+
+function registrarRetirada() {
+  const c = retColab; if (!c || !retSel.size) return;
+  const mapa = porUnidade(), sv = emServico();
+  let n = 0;
+  for (const k of retSel) {
+    if ((mapa[k] || []).length) continue;  // alguém pegou nesse meio-tempo
+    const [itemId, u] = k.split(':'), it = itemPorId(itemId);
+    if (!it) continue;
+    D().cautelas.push({ id: uid(), colabId: c.id || '', nome: c.nome, turno: c.turno || '', turnoServico: sv.turno || '', funcao: c.funcao || '',
+      itemId, itemNome: it.nome, unidade: Number(u), retiradaEm: agora(), devolvidaEm: null, devolvidaPor: '', dispositivo: D().dispositivo });
+    n++;
+  }
+  DB.salvar(); vibrar(80);
+  toast(`${n} item(ns) registrado(s) com ${primeiroNome(c.nome)}`);
+  retColab = null; retSel = new Set(); VIEWS.retirada();
+}
+function devolver(ids, por) {
+  const set = new Set(ids); let n = 0;
+  for (const x of D().cautelas) if (set.has(x.id) && !x.devolvidaEm) { x.devolvidaEm = agora(); x.devolvidaPor = por; n++; }
+  if (n) DB.salvar();
+  return n;
+}
+
+/* --- Quadro: quem está com o quê --- */
+let quadroModo = 'pessoas';
+VIEWS.quadro = () => {
+  topo('Quadro');
+  const ab = cautelasAbertas(), sv = emServico();
+  const grupos = {};
+  for (const x of ab) (grupos[x.colabId || 'n:' + x.nome] ||= []).push(x);
+  const pessoas = Object.values(grupos).map((l) => ({ l: l.sort((a, b) => a.itemNome.localeCompare(b.itemNome, 'pt') || a.unidade - b.unidade), c: l[0] }))
+    .sort((a, b) => a.c.nome.localeCompare(b.c.nome, 'pt'));
+  const foraTurno = (p) => p.c.turno && p.c.turno !== sv.turno;
+  const atrasados = pessoas.filter(foraTurno).length;
+  let corpo = '';
+  if (quadroModo === 'pessoas') {
+    corpo = pessoas.length ? pessoas.map((p) => `
+      <div class="list ${foraTurno(p) ? 'alerta' : ''}" style="${foraTurno(p) ? 'border-left:4px solid var(--bad)' : ''}">
+        <div class="grupo-t">${esc(p.c.nome)}<span>${p.c.turno ? 'Turno ' + esc(p.c.turno) : 'fora da escala'}</span></div>
+        <div class="small muted" style="padding:2px 14px 0">${p.l.length} item(ns) · desde ${fmt(p.l.reduce((m, x) => (x.retiradaEm < m ? x.retiradaEm : m), p.l[0].retiradaEm))}
+          ${foraTurno(p) ? ' · <span class="tag bad">turno encerrado — devolver</span>' : ''}</div>
+        <div class="unids">${p.l.map((x) => `<span class="tag" style="font-size:13px;padding:5px 10px">${esc(x.itemNome)} ${x.unidade}</span>`).join('')}</div>
+        ${supervisor() ? `<div style="padding:0 14px 12px"><button class="btn full" data-a="quadro-dev" data-ids="${esc(p.l.map((x) => x.id).join(','))}">Dar baixa (devolvido)</button></div>` : ''}
+      </div>`).join('') : '<div class="empty">Nenhum item retirado agora. ✓</div>';
+  } else if (quadroModo === 'itens') {
+    const mapa = porUnidade();
+    corpo = itensUnidade().map((i) => {
+      const us = unidadesDe(i);
+      const livres = us.filter((n) => !(mapa[i.id + ':' + n] || []).length).length;
+      return `<div class="list"><div class="grupo-t">${esc(i.nome)}<span>${livres} livre(s) de ${us.length}</span></div><div class="unids">${us.map((n) => {
+        const com = mapa[i.id + ':' + n] || [];
+        return com.length ? `<span class="unid ${com.length > 1 ? 'dup' : 'ocupada'}" style="text-align:center">${n}<small>${esc(com.map((x) => primeiroNome(x.nome)).join(' / '))}</small></span>`
+          : `<span class="unid livre" style="text-align:center">${n}<small>livre</small></span>`;
+      }).join('')}</div></div>`;
+    }).join('') || '<div class="empty">Nenhuma ferramenta com controle por unidade.</div>';
+  } else {
+    const ult = [...D().cautelas].sort((a, b) => ((b.devolvidaEm || b.retiradaEm) > (a.devolvidaEm || a.retiradaEm) ? 1 : -1)).slice(0, 60);
+    corpo = ult.length ? `<div class="list">${ult.map((x) => `<div class="li"><div class="grow"><div class="t">${esc(x.itemNome)} ${x.unidade} · ${esc(x.nome)}</div>
+      <div class="s">retirado ${fmt(x.retiradaEm)}${x.devolvidaEm ? ` · devolvido ${fmt(x.devolvidaEm)}${x.devolvidaPor && x.devolvidaPor !== x.nome ? ' (baixa: ' + esc(x.devolvidaPor) + ')' : ''}` : ''}</div></div>
+      ${x.devolvidaEm ? '<span class="tag ok">devolvido</span>' : '<span class="tag warn">em uso</span>'}</div>`).join('')}</div>` : '<div class="empty">Nenhuma retirada registrada.</div>';
+  }
+  $('#app').innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><b>${ab.length}</b><span>itens em uso</span></div>
+      <div class="kpi"><b>${pessoas.length}</b><span>colaboradores</span></div>
+      <div class="kpi"><b style="color:${atrasados ? 'var(--bad)' : 'inherit'}">${atrasados}</b><span>turno encerrado</span></div>
+    </div>
+    <div class="seg" id="qModo" style="margin-bottom:12px">${[['pessoas', 'Por colaborador'], ['itens', 'Por item'], ['hist', 'Histórico']].map(([k, n]) => `<button data-v="${k}" class="${quadroModo === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+    ${corpo}`;
+  $('#qModo').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { quadroModo = b.dataset.v; VIEWS.quadro(); } });
+};
+
 /* --- Histórico --- */
 VIEWS.historico = () => {
   topo('Histórico');
@@ -814,6 +1003,12 @@ VIEWS.ajustes = () => {
       <label class="row" style="gap:12px"><input type="checkbox" id="cfCegas" ${cfg.cegas ? 'checked' : ''} style="width:24px;min-height:24px"> <span class="grow">Contagem às cegas<br><span class="small muted">Esconde a quantidade do turno anterior durante a contagem; a comparação aparece só no fim.</span></span></label>
       <button class="btn primary full" data-a="salvar-cfg">Salvar</button>
     </div>
+    <div class="card stack"><h2>Equipe da escala (retirada)</h2>
+      <p class="small muted" style="margin:0">Colaboradores que aparecem na aba Retirada. Um por linha: <b>nome; turno (A–D); função</b>. O app destaca quem está em serviço pela escala (6‑6‑14‑14‑22‑22‑folga‑folga). Agora: <b>Turno ${esc(emServico().turno || '?')}</b>.</p>
+      <textarea id="cfColab" style="min-height:160px" placeholder="Fulano de Tal; A; Mecânico&#10;Beltrano Souza; B; Líder">${esc((cfg.colaboradores || []).map((c) => [c.nome, c.turno, c.funcao].filter((x, k) => k < 2 || x).join('; ')).join('\n'))}</textarea>
+      <div class="small muted">${'ABCD'.split('').map((t) => `Turno ${t}: ${(cfg.colaboradores || []).filter((c) => c.turno === t).length}`).join(' · ')}${(cfg.colaboradores || []).some((c) => !'ABCD'.includes(c.turno)) ? ' · sem turno: ' + (cfg.colaboradores || []).filter((c) => !'ABCD'.includes(c.turno)).length : ''}</div>
+      <button class="btn primary full" data-a="salvar-escala">Salvar equipe</button>
+    </div>
     <div class="card stack"><h2>Alertas por WhatsApp</h2>
       <p class="small muted" style="margin:0">Quem deve ser avisado quando uma conferência fechar com divergência. Um por linha: <b>nome; DDD e número</b>.</p>
       <textarea id="cfCts" placeholder="Supervisor João; 31 99999-8888&#10;Maria (almoxarifado); 31 98888-7777">${esc(cfg.contatos.map((ct) => ct.nome + '; ' + ct.numero).join('\n'))}</textarea>
@@ -834,10 +1029,11 @@ VIEWS.ajustes = () => {
       <button class="btn full" data-a="backup">Exportar backup (.json)</button>
       <button class="btn full" data-a="restaurar">Restaurar backup</button>
       <button class="btn full" data-a="csv">Exportar conferências (.csv / Excel)</button>
+      <button class="btn full" data-a="csv-retiradas">Exportar retiradas (.csv / Excel)</button>
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.11 · ferramenta interna · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.12 · ferramenta interna · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -848,6 +1044,13 @@ function baixar(nome, conteudo, tipo) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 function hoje() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function exportarRetiradas() {
+  const cel = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const linhas = [['Colaborador', 'Turno', 'Função', 'Ferramenta', 'Unidade', 'Retirada', 'Devolução', 'Baixa por']];
+  for (const x of [...D().cautelas].sort((a, b) => (a.retiradaEm > b.retiradaEm ? 1 : -1)))
+    linhas.push([x.nome, x.turno, x.funcao, x.itemNome, x.unidade, fmt(x.retiradaEm, true), x.devolvidaEm ? fmt(x.devolvidaEm, true) : 'em uso', x.devolvidaPor]);
+  baixar(`retiradas-${hoje()}.csv`, '\ufeff' + linhas.map((r) => r.map(cel).join(';')).join('\r\n'), 'text/csv');
+}
 function exportarCSV() {
   const cel = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const linhas = [['Data', 'Turno', 'Responsável', 'Código', 'Ferramenta', 'Local', 'Anterior', 'Contado', 'Diferença', 'Motivo', 'Tratamento']];
@@ -877,7 +1080,8 @@ function restaurar(e) {
    Só leitura/gravação com login; as regras de acesso estão em supabase/*.sql. */
 const SUPA_URL = 'https://blizyewnlcyaxizwlzdk.supabase.co';
 const SUPA_KEY = 'sb_publishable_F82gpF8qtfC-cezTvYzEwQ_n0ZGAR4A';  // chave pública (segura com as regras de acesso)
-const COLECOES = ['config', 'itens', 'movs', 'conferencias', 'tratamentos'];
+const COLECOES = ['config', 'itens', 'movs', 'conferencias', 'tratamentos', 'cautelas'];
+const AUSENTES = new Set();  // tabela ainda não criada na nuvem (ex.: cautelas antes do SQL 09): fica só no aparelho
 
 // JSON com chaves em ordem fixa: o banco reordena as chaves e a impressão digital precisa bater.
 function estavel(v) {
@@ -952,7 +1156,7 @@ const Nuvem = {
     return mudou;
   },
   // Técnico só envia conferências; o resto é do supervisor (a nuvem também recusa).
-  podeEnviar(col) { return col === 'conferencias' || this.sessao.papel === 'supervisor'; },
+  podeEnviar(col) { return !AUSENTES.has(col) && (col === 'conferencias' || col === 'cautelas' || this.sessao.papel === 'supervisor'); },
 
   /* -- registros locais por coleção -- */
   registros(col) {
@@ -1018,6 +1222,7 @@ const Nuvem = {
       if (await this.carregarPapel()) chegou = true;  // nível mudou: redesenha a tela
       // 1) Recebe o que mudou na nuvem
       for (const col of COLECOES) {
+       try {
         const primeira = this.sinc.cursor[col] == null;  // nunca buscou esta coleção neste aparelho
         const cursor = this.sinc.cursor[col] || 0;
         const desde = new Date(Math.max(0, cursor - 120000)).toISOString();
@@ -1028,11 +1233,13 @@ const Nuvem = {
           if (linhas.length < 1000) break;
         }
         this.sinc.cursor[col] = maior;
+        AUSENTES.delete(col);
+       } catch (e) { if (e.status === 404) { AUSENTES.add(col); continue; } throw e; }
       }
       if (chegou) DB.salvar(true);
       // 2) Envia o que mudou aqui
       for (const col of COLECOES) {
-        if (!this.podeEnviar(col)) continue;
+        if (!this.podeEnviar(col)) continue;  // (inclui tabelas ausentes na nuvem)
         const env = this.sinc.enviado[col];
         const lote = [];
         for (const [id, obj] of this.registros(col)) { const d = digital(obj); if (env[id] !== d) lote.push({ id, d, corpo: JSON.stringify({ id, dados: obj, dispositivo: D().dispositivo }) }); }
@@ -1296,6 +1503,32 @@ const ACOES = {
   'sinc-agora': async () => { await Nuvem.sincronizar(); toast(Nuvem.estado === 'ok' ? 'Sincronizado' : Nuvem.textoEstado()); VIEWS.ajustes(); },
   'sinc-info': () => toast(Nuvem.textoEstado()),
   'trocar-login': trocarLogin,
+  'ret-colab': (el) => escolherColab(colabPorId(el.dataset.c)),
+  'ret-livre': () => { const n = $('#retLivre').value.trim(); if (n.length < 3) return toast('Digite o nome completo'); escolherColab({ id: '', nome: n, turno: '', funcao: '' }); },
+  'ret-trocar': () => { retColab = null; retSel = new Set(); VIEWS.retirada(); },
+  'ret-unid': (el) => { const k = el.dataset.k; retSel.has(k) ? retSel.delete(k) : retSel.add(k); el.classList.toggle('on'); const b = $('[data-a=ret-registrar]'); b.disabled = !retSel.size; b.textContent = 'Registrar retirada' + (retSel.size ? ` (${retSel.size})` : ''); },
+  'ret-registrar': registrarRetirada,
+  'ret-dev-sel': () => { const ids = [...document.querySelectorAll('#retDev input:checked')].map((x) => x.value); if (!ids.length) return toast('Marque o que está devolvendo'); toast(`${devolver(ids, retColab.nome)} item(ns) devolvido(s)`); retColab = null; retSel = new Set(); VIEWS.retirada(); },
+  'ret-dev-tudo': () => { const ids = [...document.querySelectorAll('#retDev input')].map((x) => x.value); toast(`${devolver(ids, retColab.nome)} item(ns) devolvido(s)`); retColab = null; retSel = new Set(); VIEWS.retirada(); },
+  'quadro-dev': (el) => {
+    const ids = el.dataset.ids.split(','), x = D().cautelas.find((c) => c.id === ids[0]);
+    modal({ titulo: 'Dar baixa nos itens?', corpo: `<p>Confirmar que os <b>${ids.length}</b> item(ns) de <b>${esc(x ? x.nome : '')}</b> foram devolvidos?</p>`, ok: 'Dar baixa',
+      aoConfirmar() { const quem = 'Supervisor' + (Nuvem.sessao && Nuvem.sessao.email ? ' (' + Nuvem.sessao.email.split('@')[0] + ')' : ''); toast(`${devolver(ids, quem)} item(ns) com baixa`); VIEWS.quadro(); } });
+  },
+  'csv-retiradas': exportarRetiradas,
+  'salvar-escala': () => {
+    const cfg = D().config, antigos = cfg.colaboradores || [], ruins = [], novos = [];
+    for (const linha of $('#cfColab').value.split('\n')) {
+      if (!linha.trim()) continue;
+      const [nome, turno = '', funcao = ''] = linha.split(/[;\t]/).map((x) => x.trim());
+      const t = turno.toUpperCase().replace(/^TURNO\s*/, '');
+      if (!nome || (t && !'ABCD'.includes(t))) { ruins.push(linha.trim()); continue; }
+      const velho = antigos.find((c) => c.nome.toLowerCase() === nome.toLowerCase());
+      novos.push({ id: velho ? velho.id : uid(), nome, turno: t, funcao });
+    }
+    if (ruins.length) return modal({ titulo: 'Linhas com problema', corpo: `<p>Confira o turno (A, B, C ou D):</p><div class="small">${ruins.map((r) => '• ' + esc(r)).join('<br>')}</div>`, ok: 'Corrigir', cancelar: null });
+    cfg.colaboradores = novos; DB.salvar(); toast(`${novos.length} colaborador(es) salvos`); VIEWS.ajustes();
+  },
   'aviso-ativar': async () => {
     if (!navigator.onLine) return toast('É preciso internet para ativar');
     try { await Avisos.ativar(); toast('Notificações ativadas neste aparelho'); }

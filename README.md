@@ -112,3 +112,15 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 ## Versão 1.11 (05/10/2026)
 - Supervisor pode **apagar ferramenta** (detalhe da ferramenta → "Apagar ferramenta"): some de todos os aparelhos com as
   movimentações, por marca de exclusão sincronizada (excluidos.itens / excluidos.movs). O histórico das conferências mantém o nome.
+
+## Versão 1.12 (19/10/2026)
+- **Retirada (cautela) por unidade**, a partir do formulário de papel/WhatsApp (celulares, rádios, calibres, lanternas):
+  ferramenta com "Controle por unidade" vira unidades numeradas pela quantidade esperada (Rádio 12 → Rádio 1…12).
+  Aba **Retirada**: colaborador escolhe o nome (em serviço pela escala primeiro; outro turno; ou nome livre), toca nos números
+  e registra; devolve marcando o que está com ele. Após cada registro o app volta à lista (celular compartilhado).
+- Aba **Quadro**: por colaborador (alerta "turno encerrado — devolver"), por item (livre/ocupado) e histórico; supervisor dá baixa.
+- **Equipe da escala** em Ajustes (nome; turno A–D; função) e escala igual à do Revistamento (6,6,14,14,22,22,R,F; A6 B4 C2 D0 vs 01/10/2026).
+  Lista inicial em `escala-equipe-importar.txt` (49 pessoas da base do Revistamento de 05/10; arquivo local, não publicado).
+- Coleção nova `cautelas` (SQL `09-cautelas.sql`, testado em Postgres local com pgserver). Enquanto a tabela não existe na nuvem,
+  o app guarda as retiradas no aparelho e envia depois (AUSENTES).
+- Exportar retiradas (.csv) em Ajustes → Dados. Aba "Ferramentas" do menu passou a se chamar "Itens" (7 abas).
