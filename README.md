@@ -133,3 +133,13 @@ comparar com o turno anterior e gerar alerta quando o número não bate.
 - **Conferência mostra o que está com mecânicos** (retiradas em aberto da aba Retirada): aviso na tela de início da conferência,
   em cada ferramenta durante a contagem ("Rádio 3 — João, desde …") e na janela de divergência, com o motivo
   "Com mecânico" que preenche a justificativa com unidades e nomes (só quando falta item).
+
+## Versão 1.15 (11/11/2026)
+- **Devolver direto no Quadro, para qualquer perfil** (antes só supervisor; técnico não conseguia): toque no item (ou na unidade, em "Por item") ou em "Devolver tudo"; pede confirmação. Baixa por técnico fica registrada como "Quadro".
+- **Busca por nome** na aba Retirada (sem diferenciar acento/maiúscula), no lugar de rolar a lista da equipe.
+- **Aviso claro quando a unidade já foi pega** por outra pessoa no meio-tempo (antes aparecia "0 item(ns) registrado(s)").
+
+## Manuais atualizados para a v1.14 (19/10/2026)
+- Guia do Técnico (19 p.) e Guia do Supervisor (30 p.) regenerados: capítulo "Retirada e Quadro", aviso de mecânicos na conferência
+  e motivo "Com mecânico", equipe da escala, controle por unidade, importação sem duplicar, aba "Itens" e FAQ novo.
+- Para regenerar: servidor em 8765 na pasta Ferramentaria, depois `capturar_telas.py` e `montar_manuais.py` (em Manuais/fonte).

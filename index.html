@@ -236,7 +236,7 @@ const itemPorId = (id) => D().itens.find((i) => i.id === id);
 const supervisor = () => !Nuvem.ativa() || Nuvem.sessao.papel === 'supervisor';
 const SO_SUPERVISOR = new Set(['novo-item', 'editar-item', 'mov', 'importar', 'desativar', 'reativar', 'tratar',
   'salvar-cfg', 'salvar-alertas', 'backup', 'restaurar', 'csv', 'apagar', 'sair', 'apagar-historico', 'apagar-conf',
-  'aviso-ativar', 'aviso-desativar', 'aviso-teste', 'apagar-item', 'quadro-dev', 'csv-retiradas', 'salvar-escala']);
+  'aviso-ativar', 'aviso-desativar', 'aviso-teste', 'apagar-item', 'csv-retiradas', 'salvar-escala']);
 /* ---------- Escala (mesma regra do app Revistamento ZTO) ----------
    Turnos A–D em ciclo de 8 dias: 6,6,14,14,22,22,R,F (06–14, 14–22, 22–06, repouso, folga). */
 const CICLO = ['6', '6', '14', '14', '22', '22', 'R', 'F'];
@@ -835,12 +835,25 @@ function telaEscolherColab() {
     <div class="status neutral" style="padding-bottom:22px"><div class="big" style="font-size:19px">Quem está retirando?</div>
       <div>Em serviço agora: <b>Turno ${esc(sv.turno || '?')}</b> (${HORARIO[sv.h]}) · ${fmt(agora()).slice(0, 5)}</div></div>
     ${cols.length ? `
+      <input id="retBusca" type="search" placeholder="🔍 Buscar meu nome" autocomplete="off" style="margin:10px 0">
+      <div id="retLista">
       ${doTurno.length ? `<div class="group-h">Turno ${esc(sv.turno)} — em serviço</div><div class="pessoas">${doTurno.map(botao).join('')}</div>` : ''}
       <div class="group-h">Outro turno</div>
-      <select id="retOutro"><option value="">Escolha o nome…</option>${outros.map((c) => `<option value="${esc(c.id)}">${esc(c.nome)} (Turno ${esc(c.turno || '–')})</option>`).join('')}</select>`
+      <select id="retOutro"><option value="">Escolha o nome…</option>${outros.map((c) => `<option value="${esc(c.id)}">${esc(c.nome)} (Turno ${esc(c.turno || '–')})</option>`).join('')}</select></div>`
     : `<div class="card small muted">A equipe da escala ainda não foi cadastrada${supervisor() ? ' — cadastre em Ajustes → Equipe da escala' : ' (o supervisor cadastra em Ajustes)'}. Por enquanto, digite o nome abaixo.</div>`}
     <div class="group-h">Nome não está na lista?</div>
     <div class="row"><input id="retLivre" class="grow" placeholder="Digite o nome completo" autocomplete="off"><button class="btn" data-a="ret-livre">Usar</button></div>`;
+  const bq = $('#retBusca');
+  if (bq) {
+    const lista = $('#retLista'), orig = lista.innerHTML;
+    const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    bq.addEventListener('input', () => {
+      const t = norm(bq.value.trim());
+      if (!t) { lista.innerHTML = orig; const o2 = $('#retOutro'); if (o2) o2.addEventListener('change', () => { if (o2.value) escolherColab(colabPorId(o2.value)); }); return; }
+      const achou = cols.filter((c) => norm(c.nome).includes(t)).sort(ordena);
+      lista.innerHTML = achou.length ? `<div class="pessoas">${achou.map(botao).join('')}</div>` : '<div class="empty">Nenhum nome encontrado. Use “Nome não está na lista?” abaixo.</div>';
+    });
+  }
   const o = $('#retOutro');
   if (o) o.addEventListener('change', () => { if (o.value) escolherColab(colabPorId(o.value)); });
 }
@@ -875,9 +888,9 @@ function telaRetirar(unids) {
 function registrarRetirada() {
   const c = retColab; if (!c || !retSel.size) return;
   const mapa = porUnidade(), sv = emServico();
-  let n = 0;
+  let n = 0; const jaPegas = [];
   for (const k of retSel) {
-    if ((mapa[k] || []).length) continue;  // alguém pegou nesse meio-tempo
+    if ((mapa[k] || []).length) { const [iid, u] = k.split(':'), it0 = itemPorId(iid); jaPegas.push(`${it0 ? it0.nome : 'Item'} ${u} (${primeiroNome(mapa[k][0].nome)})`); continue; }  // alguém pegou nesse meio-tempo
     const [itemId, u] = k.split(':'), it = itemPorId(itemId);
     if (!it) continue;
     D().cautelas.push({ id: uid(), colabId: c.id || '', nome: c.nome, turno: c.turno || '', turnoServico: sv.turno || '', funcao: c.funcao || '',
@@ -885,6 +898,12 @@ function registrarRetirada() {
     n++;
   }
   DB.salvar(); vibrar(80);
+  if (jaPegas.length) {
+    retSel = new Set(); VIEWS.retirada();
+    modal({ titulo: 'Atenção: já estava com outra pessoa', corpo: `<p>${jaPegas.map(esc).join('; ')} <b>não foi registrado para você</b>, porque outra pessoa pegou antes.</p><p>${n ? `Os outros <b>${n}</b> item(ns) foram registrados com ${esc(primeiroNome(c.nome))}.` : 'Nada foi registrado. Escolha outra unidade livre.'}</p>`, ok: 'Entendi', cancelar: '' });
+    if (n) { retColab = null; VIEWS.retirada(); }
+    return;
+  }
   toast(`${n} item(ns) registrado(s) com ${primeiroNome(c.nome)}`);
   retColab = null; retSel = new Set(); VIEWS.retirada();
 }
@@ -913,18 +932,18 @@ VIEWS.quadro = () => {
         <div class="grupo-t">${esc(p.c.nome)}<span>${p.c.turno ? 'Turno ' + esc(p.c.turno) : 'fora da escala'}</span></div>
         <div class="small muted" style="padding:2px 14px 0">${p.l.length} item(ns) · desde ${fmt(p.l.reduce((m, x) => (x.retiradaEm < m ? x.retiradaEm : m), p.l[0].retiradaEm))}
           ${foraTurno(p) ? ' · <span class="tag bad">turno encerrado — devolver</span>' : ''}</div>
-        <div class="unids">${p.l.map((x) => `<span class="tag" style="font-size:13px;padding:5px 10px">${esc(x.itemNome)} ${x.unidade}</span>`).join('')}</div>
-        ${supervisor() ? `<div style="padding:0 14px 12px"><button class="btn full" data-a="quadro-dev" data-ids="${esc(p.l.map((x) => x.id).join(','))}">Dar baixa (devolvido)</button></div>` : ''}
+        <div class="unids">${p.l.map((x) => `<button class="unid" data-a="quadro-dev" data-ids="${esc(x.id)}" style="font-size:14px">${esc(x.itemNome)} ${x.unidade}<small style="max-width:none">toque p/ devolver</small></button>`).join('')}</div>
+        <div style="padding:0 14px 12px"><button class="btn primary full" data-a="quadro-dev" data-ids="${esc(p.l.map((x) => x.id).join(','))}">Devolver tudo (${p.l.length})</button></div>
       </div>`).join('') : '<div class="empty">Nenhum item retirado agora. ✓</div>';
   } else if (quadroModo === 'itens') {
     const mapa = porUnidade();
-    corpo = itensUnidade().map((i) => {
+    corpo = '<div class="small muted" style="margin-bottom:8px">Toque numa unidade em uso para registrar a devolução.</div>' + itensUnidade().map((i) => {
       const us = unidadesDe(i);
       const livres = us.filter((n) => !(mapa[i.id + ':' + n] || []).length).length;
       return `<div class="list"><div class="grupo-t">${esc(i.nome)}<span>${livres} livre(s) de ${us.length}</span></div><div class="unids">${us.map((n) => {
         const com = mapa[i.id + ':' + n] || [];
-        return com.length ? `<span class="unid ${com.length > 1 ? 'dup' : 'ocupada'}" style="text-align:center">${n}<small>${esc(com.map((x) => primeiroNome(x.nome)).join(' / '))}</small></span>`
-          : `<span class="unid livre" style="text-align:center">${n}<small>livre</small></span>`;
+        return com.length ? `<button class="unid ${com.length > 1 ? 'dup' : 'ocupada'}" style="text-align:center" data-a="quadro-dev" data-ids="${esc(com.map((x) => x.id).join(','))}">${n}<small>${esc(com.map((x) => primeiroNome(x.nome)).join(' / '))}</small></button>`
+          : `<span class="unid livre" style="text-align:center;display:inline-block">${n}<small>livre</small></span>`;
       }).join('')}</div></div>`;
     }).join('') || '<div class="empty">Nenhuma ferramenta com controle por unidade.</div>';
   } else {
@@ -1050,7 +1069,7 @@ VIEWS.ajustes = () => {
       ${Nuvem.ativa() ? '' : '<button class="btn danger full" data-a="apagar">Apagar todos os dados</button>'}
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
     </div>
-    <p class="small muted" style="text-align:center">Ferramentaria v1.14 · ferramenta interna · funciona sem internet</p>`;
+    <p class="small muted" style="text-align:center">Ferramentaria v1.15 · ferramenta interna · funciona sem internet</p>`;
   $('#arqBackup').addEventListener('change', restaurar);
 };
 
@@ -1528,9 +1547,13 @@ const ACOES = {
   'ret-dev-sel': () => { const ids = [...document.querySelectorAll('#retDev input:checked')].map((x) => x.value); if (!ids.length) return toast('Marque o que está devolvendo'); toast(`${devolver(ids, retColab.nome)} item(ns) devolvido(s)`); retColab = null; retSel = new Set(); VIEWS.retirada(); },
   'ret-dev-tudo': () => { const ids = [...document.querySelectorAll('#retDev input')].map((x) => x.value); toast(`${devolver(ids, retColab.nome)} item(ns) devolvido(s)`); retColab = null; retSel = new Set(); VIEWS.retirada(); },
   'quadro-dev': (el) => {
-    const ids = el.dataset.ids.split(','), x = D().cautelas.find((c) => c.id === ids[0]);
-    modal({ titulo: 'Dar baixa nos itens?', corpo: `<p>Confirmar que os <b>${ids.length}</b> item(ns) de <b>${esc(x ? x.nome : '')}</b> foram devolvidos?</p>`, ok: 'Dar baixa',
-      aoConfirmar() { const quem = 'Supervisor' + (Nuvem.sessao && Nuvem.sessao.email ? ' (' + Nuvem.sessao.email.split('@')[0] + ')' : ''); toast(`${devolver(ids, quem)} item(ns) com baixa`); VIEWS.quadro(); } });
+    const ids = el.dataset.ids.split(','), xs = ids.map((id) => D().cautelas.find((c) => c.id === id)).filter((x) => x && !x.devolvidaEm);
+    if (!xs.length) return toast('Já foi devolvido');
+    const lista = xs.map((x) => `${esc(x.itemNome)} ${x.unidade}`).join(', '), quem = xs[0].nome;
+    modal({ titulo: 'Registrar devolução?', corpo: `<p><b>${lista}</b><br>estava com <b>${esc(quem)}</b>.</p><p>Confirmar que ${xs.length > 1 ? 'foram devolvidos' : 'foi devolvido'}?</p>`, ok: 'Devolvido',
+      aoConfirmar() {
+        const por = supervisor() ? 'Supervisor' + (Nuvem.sessao && Nuvem.sessao.email ? ' (' + Nuvem.sessao.email.split('@')[0] + ')' : '') : 'Quadro';
+        toast(`${devolver(xs.map((x) => x.id), por)} item(ns) devolvido(s)`); VIEWS.quadro(); } });
   },
   'csv-retiradas': exportarRetiradas,
   'salvar-escala': () => {
